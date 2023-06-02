@@ -1,22 +1,23 @@
 
+from db import DbClient
 from flask import Flask,request
 
 
 app = Flask(__name__)
+db = DbClient(True)
 
 
 
-
-@app.route("/test",methods=['POST'])
-def test():
+@app.route("/login",methods=['POST'])
+def login():
 
     data = request.get_json()
     
+    if db.validate_logging(data['username'], data["password"]):
+        return "success",200
 
-    print(data,flush=False)
 
-
-    return f"username: {data['username']} password: {data['password']}"
+    return "failed",401
 
 
 
