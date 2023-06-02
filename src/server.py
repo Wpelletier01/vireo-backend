@@ -1,5 +1,5 @@
 
-from flask import Flask
+from flask import Flask,request
 
 
 app = Flask(__name__)
@@ -7,9 +7,16 @@ app = Flask(__name__)
 
 
 
-@app.route("/test")
+@app.route("/test",methods=['POST'])
 def test():
-    return "this a test"
+
+    data = request.get_json()
+    
+
+    print(data,flush=False)
+
+
+    return f"username: {data['username']} password: {data['password']}"
 
 
 
