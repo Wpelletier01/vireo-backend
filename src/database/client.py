@@ -1,6 +1,5 @@
 
 import mariadb
-import pandas as pd
 from .container import UserInfo
 from enum import Enum
 
