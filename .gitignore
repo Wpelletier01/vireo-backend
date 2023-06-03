@@ -1,5 +1,4 @@
 src/__pycache__/**
 src/database/__pycache__/**
 src/test/__pycache__/**
-venv/**
 .pytest_cache/**
