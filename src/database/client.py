@@ -1,6 +1,6 @@
 
 import mariadb
-from .container import UserInfo
+from database.container import UserInfo
 from enum import Enum
 
 # for connection outside the nat network
@@ -111,13 +111,12 @@ class DbClient:
     def validate_logging(self,uname:str,password:str) -> bool:
 
         query = f"""
-            
             SELECT username,password 
             from accountIds 
             WHERE USERNAME = '{uname}'
             AND PASSWORD = '{password}';
         """
-        
+
         return self.__query(query,1)
 
        
@@ -135,7 +134,6 @@ class DbClient:
     def __username_exist(self,username:str) -> bool:
         
         query = f"""
-        
             SELECT username
             FROM accountIds
             WHERE username = '{username}';
@@ -143,6 +141,14 @@ class DbClient:
 
         return self.__query(query,1)
 
+    def __getUserCount(self) -> int:
+
+        query = """SELECT COUNT(id) FROM accountIds;"""
+
+        self.__query(query, 1)
+
+        return self.__cursor.fetchall()[0][0]
+            
 
     def insertNewAccount(self,userinfo:UserInfo):
         
@@ -152,8 +158,9 @@ class DbClient:
         if self.__username_exist(userinfo.username):
             raise InsertAccountErr("Username exist", InsertAccountErrorType.UsernameAlreadyUsed)
 
+        id = self.__getUserCount() + 1
 
-    
-    
+        self.__insert(userinfo.to_insert_id_query(id))
+        self.__insert(userinfo.to_insert_info_query(id))        
     
     
