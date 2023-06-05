@@ -5,10 +5,10 @@ from typing import Union
 
 
 @dataclass
-class UserInfo:
-
+class Channel:
+    cid:        int 
     username:   str
-    password:   str 
+    password:   str
     fname:      str 
     mname:      Union[str,None]
     lname:      str 
@@ -16,21 +16,19 @@ class UserInfo:
     birthday:   str
 
 
-    def to_insert_id_query(self,id:int):
+    def insert_to_channels(self):
         
         return f"""
-             
-            INSERT INTO accountIds (
-                id,
-	            username,
-                password
+            INSERT INTO Channels (
+                ChannelID,
+	            Username,
+                Password
             )
             VALUES 
-            ( {id},'{self.username}',"{self.password}")
-        
+            ( '{self.cid}','{self.username}','{self.password}')
         """
 
-    def to_insert_info_query(self,id:int):
+    def insert_to_channeslDetails(self):
 
         middle_name = "NULL"
 
@@ -39,14 +37,21 @@ class UserInfo:
             middle_name = f"'{self.mname}'"
         
         return f"""
-            INSERT INTO accountInfo (
-		        id,
-	            fname,
-                mname,
-                lname,
-                email,
-                birth
+            INSERT INTO ChannelDetails (
+                ChannelId,
+	            Fname,
+                Mname,
+                Lname,
+                Email,
+                Birth
             )   
             VALUES
-            ({id},'{self.fname}',{middle_name},'{self.lname}','{self.email}',Date('{self.birthday}'));
+            (
+                {self.cid},
+                '{self.fname}',
+                {middle_name},
+                '{self.lname}',
+                '{self.email}',
+                Date('{self.birthday}')
+            );
         """

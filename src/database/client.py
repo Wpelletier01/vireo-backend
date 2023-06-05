@@ -1,55 +1,35 @@
-
 import mariadb
-from database.container import UserInfo
+import bcrypt
 from enum import Enum
+from typing import List
 
 # for connection outside the nat network
 PORT_FOWARDING = 5533
 HOST_OUTSIDE = "127.0.0.1"
-
-
 DB_USER = "admin"
 PASSWORD = "vireo"
 DB_NAME = "vireodb"
 
 
+class DatabaseErrorType(Enum):
+    
+    UnexpectedQueryReturn = 1
+    TableInsertion = 2
+    Connection = 3
+    BadQuery = 4
+
+
 class DatabaseError(Exception):
 
-    def __init__(self, message):
+    def __init__(self, message,etype:DatabaseErrorType):
         self.msg = message
+        self.__etype = etype
     
     def __str__(self):
-
         return self.msg
-    
-class QueryError(DatabaseError):
 
-    def __init__(self,message):
-
-        super().__init__(f"Query Error: {message}")
-
-class UnexpectedReturnError(QueryError):
-
-    def __init__(self,expected,found):
-
-        super().__init__(f"Unexpected Return Error: Expected {expected} but found {found}")
-
-class InsertQuerryError(QueryError):
-    def __init__(self, message):
-        super().__init__("Insert Call failed because {message}")
-
-class InsertAccountErrorType(Enum):
-
-    EmailAlreadyUsed = 1
-    UsernameAlreadyUsed = 2
-
-class InsertAccountErr(DatabaseError):
-
-    def __init__(self, message:str,error_type:InsertAccountErrorType):
-
-        self.error_type = error_type
-
-        super().__init__(message)
+    def getType(self):
+        return self.__etype
 
 
 class DbClient:
@@ -57,7 +37,6 @@ class DbClient:
     def __init__(self):
         self.__connection = None
         self.__cursor = None 
-
 
     def initiate_connection(self,dev_mode:bool):
 
@@ -75,92 +54,53 @@ class DbClient:
                     )
 
             except mariadb.Error as e:
-                raise DatabaseError(e.args)
+                raise DatabaseError(e.args[0],DatabaseErrorType.Connection)
         
         
         self.__cursor = self.__connection.cursor()
 
 
-    def __query(self,query:str,expect:int) -> bool:
+    def query(self,query:str,atMost:int) -> int:
+
+        try:
+            self.__cursor.execute(query)
+            nbRow = self.__cursor.rowcount
+
+            if nbRow > atMost:
+            
+                raise DatabaseError(
+                    "Unexpected Number of return value have been found",
+                    DatabaseErrorType.UnexpectedQueryReturn
+                    )
+            
+            return nbRow
+
+
+        except mariadb.Error as e:
+            raise DatabaseError(e.args[0],DatabaseErrorType.BadQuery)
+
+    def queryForValue(self,query) -> List:
 
         try:
             self.__cursor.execute(query)
 
-            nb_row = self.__cursor.rowcount
-
-            if nb_row == expect:
-                return True 
-            elif nb_row == 0:
-                return False
-            else:
-                raise UnexpectedReturnError(expect, nb_row)
+            return self.__cursor.fetchall()
 
         except mariadb.Error as e:
-            raise DatabaseError(e.args)
+            raise DatabaseError(
+                    f"Unable to execute query reason: {e.args[0]}",
+                    DatabaseErrorType.BadQuery
+                )
 
 
-    def __insert(self,query):
+    def insert(self,query):
 
         try:
             self.__cursor.execute(query)
             self.__connection.commit()
-
         except mariadb.Error as e:
-            raise InsertQuerryError(e.args)
+            raise DatabaseError(
+                f"Unable to execute insert query because of: {e.args[0]}",
+                DatabaseErrorType.TableInsertion
+                )
         
-    def validate_logging(self,uname:str,password:str) -> bool:
-
-        query = f"""
-            SELECT username,password 
-            from accountIds 
-            WHERE USERNAME = '{uname}'
-            AND PASSWORD = '{password}';
-        """
-
-        return self.__query(query,1)
-
-       
-    def __email_exist(self,email) -> bool:
-
-        query = f"""
-        
-            SELECT email
-            FROM accountInfo
-            WHERE email = '{email}';
-        """
-
-        return self.__query(query, 1)
-
-    def __username_exist(self,username:str) -> bool:
-        
-        query = f"""
-            SELECT username
-            FROM accountIds
-            WHERE username = '{username}';
-        """
-
-        return self.__query(query,1)
-
-    def __getUserCount(self) -> int:
-
-        query = """SELECT COUNT(id) FROM accountIds;"""
-
-        self.__query(query, 1)
-
-        return self.__cursor.fetchall()[0][0]
-            
-
-    def insertNewAccount(self,userinfo:UserInfo):
-        
-        if self.__email_exist(userinfo.email):
-            raise InsertAccountErr("Email exist", InsertAccountErrorType.EmailAlreadyUsed)
-        
-        if self.__username_exist(userinfo.username):
-            raise InsertAccountErr("Username exist", InsertAccountErrorType.UsernameAlreadyUsed)
-
-        id = self.__getUserCount() + 1
-
-        self.__insert(userinfo.to_insert_id_query(id))
-        self.__insert(userinfo.to_insert_info_query(id))        
-    
-    
