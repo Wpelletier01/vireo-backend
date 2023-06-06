@@ -81,7 +81,7 @@ class UploadErr(Exception):
         self.etype = etype
         match etype:
 
-            case UploadErrType.BufferId:
+            case UploadErrType.BufferIndex:
                 self.msg = "No video at the current index in the buffer"
             case UploadErrType.MissingField:
                 self.msg = f"Missing key for json request: {option}"

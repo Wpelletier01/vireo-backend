@@ -21,7 +21,7 @@ def token_required(f):
         payload = jwt.decode(token,key=TMP_SECRET,algorithms=ALG)
 
         if datetime.now().timestamp() >= payload["expire"]:
-            return  {"reason": expire},404
+            return  {"reason": "expire"},404
         
         print(request.get_json(),flush=False)
 
@@ -43,14 +43,24 @@ def signup():
     return resp
 
 @app.route("/upload",methods=['POST'])
-@token_required
-def upload(payload:dict):
+def upload():
+
+    if "video" in request.content_type:
+        data = request.get_data()
+
+        return server.addVideo(data)
+    elif "application/json":
+        data = request.get_json()
+        print(data)
+        resp = server.handleVideo(data)
+        print(resp)
+
+        return resp
     
-   
-    print(d)
+
+    #TODO: implement for other content type
     
-    print(data)
-    return 200
+    return "",400
 
 
 if __name__ == "__main__":

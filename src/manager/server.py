@@ -63,11 +63,16 @@ class Server:
 
         return token,200
 
+    def addVideo(self,data):
+        #TODO: validate size
+        buffer_id = self.upload.pushToBuffer(data)
+        return {"buffer_id": buffer_id},200
 
-    def handleVideo(self,data:dict,uploader:str):
-        print(data,flush=True)
+
+    def handleVideo(self,data:dict):
+        
         try:
-            self.upload.handle(data, uploader, self.db_client)
+            self.upload.handle(data, self.db_client)
             return "uploaded",200
         
         except UploadErr as e:
