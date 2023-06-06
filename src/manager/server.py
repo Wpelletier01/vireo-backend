@@ -66,6 +66,8 @@ class Server:
     def addVideo(self,data):
         #TODO: validate size
         buffer_id = self.upload.pushToBuffer(data)
+        print(buffer_id,flush=True)
+        
         return {"buffer_id": buffer_id},200
 
 

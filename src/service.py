@@ -47,8 +47,9 @@ def upload():
 
     if "video" in request.content_type:
         data = request.get_data()
-
-        return server.addVideo(data)
+        id_ = server.addVideo(data)
+        print(id_)
+        return id_
     elif "application/json":
         data = request.get_json()
         print(data)
