@@ -55,3 +55,4 @@ class Channel:
                 Date('{self.birthday}')
             );
         """
+

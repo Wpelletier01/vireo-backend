@@ -1,10 +1,33 @@
-
+from functools import wraps
 from manager.server import Server
 from flask import Flask,request
-  
+from datetime import datetime, timedelta
+import jwt
+
+TMP_SECRET = "1dcd2fbc17612a8ef4b5c860ed951942989b76f612e952551f9f9865c8344c71"
+ALG = "HS256"
+
 app = Flask(__name__)  
 server = Server(True) 
 
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        
+    
+        
+        token =  request.headers["Authorization"].split(" ")[1]
+        payload = jwt.decode(token,key=TMP_SECRET,algorithms=ALG)
+
+        if datetime.now().timestamp() >= payload["expire"]:
+            return  {"reason": expire},404
+        
+        print(request.get_json(),flush=False)
+
+        return f(payload, *args, **kwargs)
+
+    return decorated
 
 @app.route("/signin",methods=['POST'])
 def signin():
@@ -20,12 +43,14 @@ def signup():
     return resp
 
 @app.route("/upload",methods=['POST'])
-def upload():
-
+@token_required
+def upload(payload:dict):
     
-    server.handleAuthToken(request.headers["authorization"])
-
-    return "",200
+   
+    print(d)
+    
+    print(data)
+    return 200
 
 
 if __name__ == "__main__":

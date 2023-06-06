@@ -1,13 +1,14 @@
 from database.client import DbClient,DatabaseError
 from manager.signin import SignInManager
 from manager.signup import SignUpManager
-from manager.error import SignInError,SignUpError,SignInErrType
+from manager.upload import UploadManager
+from manager.error import SignInError,SignUpError,SignInErrType,UploadErr
 from datetime import datetime, timedelta
 
 import jwt
 
+
 TMP_SECRET = "1dcd2fbc17612a8ef4b5c860ed951942989b76f612e952551f9f9865c8344c71"
-ALG = "HS256"
 
 class Server:
 
@@ -17,6 +18,7 @@ class Server:
         self.db_client.initiate_connection(inDevelopment)
         self.signin = SignInManager()
         self.signup = SignUpManager()
+        self.upload = UploadManager()
 
     def handleSignIn(self,data):
         
@@ -62,23 +64,15 @@ class Server:
         return token,200
 
 
-    def tokenExpire(self,expire_time:float) -> bool:
-
-        if datetime.now().timestamp() >= expire_time:
-            return True
+    def handleVideo(self,data:dict,uploader:str):
+        print(data,flush=True)
+        try:
+            self.upload.handle(data, uploader, self.db_client)
+            return "uploaded",200
         
-        return False
-
-
-    def handleAuthToken(self,auth:str):
-
-        token = auth.split(" ")[1]
-        payload = jwt.decode(token,key=TMP_SECRET,algorithms=ALG)
-
-        if self.tokenExpire(payload["expire"]):
-
-            return "expire",400
-        
-        return "success",200
-
+        except UploadErr as e:
+            print(e.msg,flush=True)
+            return e.msg,400
+        except DatabaseError as e:
+            return "Database",500,
 

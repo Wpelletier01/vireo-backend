@@ -8,7 +8,8 @@ class SignInErrType(Enum):
     MissingField        = 2
     EmailNotFound       = 3
     UsernameNotFound    = 4
-    WrongPassword       = 5 
+    WrongPassword       = 5
+    TokenExpire         = 6
 
 class SignInError(Exception):
 
@@ -28,6 +29,8 @@ class SignInError(Exception):
                 self.msg = "username not found"
             case SignInErrType.WrongPassword:
                 self.msg = "wrong password"
+            case SignInErrType.TokenExpire:
+                self.msg = "token expire"
 
             
     def __str__(self):
@@ -64,4 +67,25 @@ class SignUpError(Exception):
         super().__init__("Invalid Json body")
 
     def __str_(self):
+        return self.msg 
+
+class UploadErrType(Enum):
+
+    BufferIndex     = 1
+    MissingField    = 2
+
+class UploadErr(Exception):
+    def __init__(self,etype:UploadErrType,option=None):
+        
+        self.msg = ""
+        self.etype = etype
+        match etype:
+
+            case UploadErrType.BufferId:
+                self.msg = "No video at the current index in the buffer"
+            case UploadErrType.MissingField:
+                self.msg = f"Missing key for json request: {option}"
+
+
+    def __str__(self):
         return self.msg 
