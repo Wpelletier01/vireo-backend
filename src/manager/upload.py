@@ -7,8 +7,8 @@ import string
 import cv2
 import time
 
-TMP_DIR = "videodb-tmp/"
-TMP_THUMB = "thumbnaildb-tmp/"
+TMP_VIDEO = "testdb/videos"
+TMP_THUMB = "testdb/thumbnails"
 
 UPLOAD_KEY = [
     "uploader", #TODO: tmp until token system setup

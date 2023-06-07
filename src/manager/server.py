@@ -8,7 +8,8 @@ from datetime import datetime, timedelta
 import os
 import jwt
 
-TMP_THUMB = "thumbnaildb-tmp/"
+TMP_VIDEO = "../testdb/videos"
+TMP_THUMB = "../testdb/thumbnails"
 VIDEO_CHUNK = 20
 TMP_SECRET = "1dcd2fbc17612a8ef4b5c860ed951942989b76f612e952551f9f9865c8344c71"
 

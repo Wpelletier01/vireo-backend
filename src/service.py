@@ -8,7 +8,8 @@ import os
 import time
 
 TMP_SECRET = "1dcd2fbc17612a8ef4b5c860ed951942989b76f612e952551f9f9865c8344c71"
-TMP_THUMB = "../thumbnaildb-tmp/"
+TMP_VIDEO = "testdb/videos"
+TMP_THUMB = "testdb/thumbnails"
 ALG = "HS256"
 
 app = Flask(__name__)  
