@@ -104,3 +104,12 @@ class DbClient:
                 DatabaseErrorType.TableInsertion
                 )
         
+    def alter(self,query):
+        try:
+            self.__cursor.execute(query)
+        
+        except mariadb.Error as e:
+            raise DatabaseError(
+                f"Unable to execute alter table query because of: {e.args[0]}",
+                DatabaseErrorType.TableInsertion
+                )
