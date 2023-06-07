@@ -5,9 +5,11 @@ from manager.upload import UploadManager
 from manager.error import SignInError,SignUpError,SignInErrType,UploadErr
 from datetime import datetime, timedelta
 
+import os
 import jwt
 
-
+TMP_THUMB = "thumbnaildb-tmp/"
+VIDEO_CHUNK = 20
 TMP_SECRET = "1dcd2fbc17612a8ef4b5c860ed951942989b76f612e952551f9f9865c8344c71"
 
 class Server:
@@ -61,7 +63,7 @@ class Server:
         except SignUpError as e:
             return e.msg,400
 
-        return token,200
+        return "",200
 
     def addVideo(self,data):
         #TODO: validate size
@@ -83,3 +85,39 @@ class Server:
         except DatabaseError as e:
             return "Database",500,
 
+
+    def retreive_video_info(self,chunks:int):
+        
+        info = { "videos": [] }
+
+        videos = self.db_client.queryForValue("""
+            SELECT PathHash,ChannelID,Title
+            FROM Videos;""")
+        print(videos)
+        i = 0
+        
+        while i < len(videos):
+
+            if i >= (VIDEO_CHUNK*chunks):
+                break
+
+            hpath = videos[i][0]
+            cid = videos[i][1]
+            title = videos[i][2]
+
+            channel = self.db_client.queryForValue(f"""
+                SELECT Username
+                FROM Channels
+                WHERE ChannelID = '{cid}';
+
+            """)[0][0]
+
+            info["videos"].append({
+                "thumbnail":    hpath,
+                "channel":      channel,
+                "title":        title,
+            })
+        
+            i+=1
+        
+        return info,200

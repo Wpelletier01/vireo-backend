@@ -2,5 +2,6 @@ src/__pycache__/**
 src/database/__pycache__/**
 src/test/__pycache__/**
 videodb-tmp/**
+thumbnaildb-tmp/**
 venv/**
 .pytest_cache/**

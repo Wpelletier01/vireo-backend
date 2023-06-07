@@ -1,6 +1,6 @@
 from database.container import Channel
 from database.client import DbClient
-
+from manager.error import SignUpError,SignUpErrType
 import bcrypt
 
 
