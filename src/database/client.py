@@ -17,6 +17,7 @@ class DatabaseErrorType(Enum):
     TableInsertion = 2
     Connection = 3
     BadQuery = 4
+    
 
 
 class DatabaseError(Exception):

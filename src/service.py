@@ -1,6 +1,6 @@
 from functools import wraps
 from manager.server import Server
-from flask import Flask,request,send_file
+from flask import Flask,request,send_file,make_response,send_from_directory
 from datetime import datetime, timedelta
 
 import jwt
@@ -80,6 +80,14 @@ def home_video(chunk):
 def get_thumbnail(hpath):
     return send_file(os.path.join(TMP_THUMB,f"{hpath}.png"))
 
+@app.route("/video/<string:hpath>")
+def getVideo(hpath): 
+
+    return make_response(send_from_directory(TMP_VIDEO, f"{hpath}.mp4"))
+
+@app.route("/video/info/<string:hpath>")
+def getVideoInfo(hpath):
+    return server.getVideoInfo(hpath)
 
 
 if __name__ == "__main__":

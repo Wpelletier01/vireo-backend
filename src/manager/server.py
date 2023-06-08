@@ -88,7 +88,7 @@ class Server:
 
 
     def retreive_video_info(self,chunks:int):
-        
+        #TODO: check how we can join this function with getVideoInfo
         info = { "videos": [] }
 
         videos = self.db_client.queryForValue("""
@@ -117,8 +117,37 @@ class Server:
                 "thumbnail":    hpath,
                 "channel":      channel,
                 "title":        title,
+                "hpath":        hpath
             })
         
             i+=1
         
         return info,200
+
+
+
+    def getVideoInfo(self,hpath:str):
+
+        #TODO: validate that hpath exist
+
+        try:
+            title,desc,date,cid = self.db_client.queryForValue(f"""
+                    SELECT Title,Description,Upload,ChannelID
+                    FROM Videos
+                    WHERE PathHash = '{hpath}';""")[0]
+        
+        except IndexError: 
+            return {"status": "NOT FOUND"},200 
+
+        channel  = self.db_client.queryForValue(f"""
+                SELECT Username
+                FROM Channels
+                WHERE ChannelID = '{cid}'""")[0][0]
+            
+        return {
+            "status": "FOUND",
+            "title":title,
+            "channel":channel,
+            "description": desc,
+            "date": f"{date.year}-{date.month}-{date.day}"}, 200
+            
