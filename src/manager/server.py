@@ -13,6 +13,10 @@ TMP_THUMB = "../testdb/thumbnails"
 VIDEO_CHUNK = 20
 TMP_SECRET = "1dcd2fbc17612a8ef4b5c860ed951942989b76f612e952551f9f9865c8344c71"
 
+
+#TODO: use join table query for getting username of the channel with videos
+
+
 class Server:
 
     def __init__(self,inDevelopment:bool):
@@ -87,20 +91,18 @@ class Server:
             return "Database",500,
 
 
-    def retreive_video_info(self,chunks:int):
+    def retreive_video_info(self):
         #TODO: check how we can join this function with getVideoInfo
         info = { "videos": [] }
 
         videos = self.db_client.queryForValue("""
             SELECT PathHash,ChannelID,Title
             FROM Videos;""")
-        print(videos)
+   
         i = 0
         
         while i < len(videos):
 
-            if i >= (VIDEO_CHUNK*chunks):
-                break
 
             hpath = videos[i][0]
             cid = videos[i][1]
@@ -119,8 +121,9 @@ class Server:
                 "title":        title,
                 "hpath":        hpath
             })
-        
-            i+=1
+
+            i += 1
+
         
         return info,200
 
@@ -150,4 +153,98 @@ class Server:
             "channel":channel,
             "description": desc,
             "date": f"{date.year}-{date.month}-{date.day}"}, 200
+        
+    
+    def getChannelVideo(self,username):
+        #TODO: try to join to retreive video info
+
+        info = { "videos": [] }
+        
+        cid = self.db_client.queryForValue(f"""
+
+            SELECT ChannelID 
+            FROM Channels
+            WHERE Username = '{username}';
+
+        """)[0][0]
+        
+
+        videos = self.db_client.queryForValue(f"""
+            SELECT PathHash,Title,Upload
+            FROM Videos
+            WHERE ChannelID = '{cid}';""")
+
+        print(videos)
+  
+        i = 0
+        while i < len(videos):
+
+            hpath = videos[i][0]
+            title = videos[i][1]
+            upload = videos[i][2]
+    
+
+            #TODO: no need to sent two time hpath
+            info["videos"].append({
+                "thumbnail":    hpath,
+                "title":        title,
+                "date":         f"{upload.year}-{upload.month}-{upload.day}"
+
+            })
+
+            i+=1
+     
+        return info,200
+
+
+    def search(self,stype,squery): 
+
+        resp = []
+        #TODO: add duration of info return
+
+        #TODO: make different type of query like for only channel
+        if stype == "all":
+
+            videos = self.db_client.queryForValue(f"""
+                SELECT v.Title, c.Username, v.PathHash
+                FROM Videos v
+                JOIN Channels c
+                ON v.ChannelID = c.ChannelID
+                WHERE 
+	                Title like '%{squery}%' OR
+                    Description like '%{squery}%';""")
             
+            #TODO: add query for the number of video that each channels have
+            channels = self.db_client.queryForValue(f"""
+                SELECT Username
+                FROM Channels
+                WHERE Username like '%{squery}%';""")
+
+            
+            for video in videos:
+
+                info = {
+                    "type":     "video",
+                    "title":    video[0],
+                    "channel":  video[1],
+                    "hpath":    video[2]
+                }
+
+                resp.append(info)
+
+            for channel in channels:
+
+                print(channel[0])
+
+                #TODO: add query for the number of video that each channels have
+                info = {
+                    "type":     "channel",
+                    "channel":  channel[0],
+                    "title":     None,
+                    "hpath":    None
+
+                }
+            
+                resp.append(info)
+        
+        return { "response": resp},200

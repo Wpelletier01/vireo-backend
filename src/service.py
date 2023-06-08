@@ -68,10 +68,10 @@ def uploadvideoinfo():
     return resp
 
 
-@app.route("/videos/<int:chunk>",methods=["GET"])
-def home_video(chunk):
-    print(f"chunk: {chunk}")
-    data = server.retreive_video_info(chunk)
+@app.route("/videos",methods=["GET"])
+def home_video():
+    
+    data = server.retreive_video_info()
 
     print(data)
     return data 
@@ -88,6 +88,20 @@ def getVideo(hpath):
 @app.route("/video/info/<string:hpath>")
 def getVideoInfo(hpath):
     return server.getVideoInfo(hpath)
+
+@app.route("/channel/videos/<string:channel>",methods=["GET"])
+def getChannelVideos(channel):
+    data = server.getChannelVideo(channel)
+    print(data)
+    return data
+
+@app.route("/search/<string:stype>/<string:query>")
+def search(stype,query):
+    print("holdup")
+    data = server.search(stype,query)
+    print(data)
+    return data
+    
 
 
 if __name__ == "__main__":
