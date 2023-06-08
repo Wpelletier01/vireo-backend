@@ -1,116 +1,91 @@
 import mariadb
 import bcrypt
+import configparser
+
 from enum import Enum
 from typing import List
-
-# for connection outside the nat network
-PORT_FOWARDING = 5533
-HOST_OUTSIDE = "127.0.0.1"
-DB_USER = "admin"
-PASSWORD = "vireo"
-DB_NAME = "vireodb"
-
-
-class DatabaseErrorType(Enum):
-    
-    UnexpectedQueryReturn = 1
-    TableInsertion = 2
-    Connection = 3
-    BadQuery = 4
-    
-
-
-class DatabaseError(Exception):
-
-    def __init__(self, message,etype:DatabaseErrorType):
-        self.msg = message
-        self.__etype = etype
-    
-    def __str__(self):
-        return self.msg
-
-    def getType(self):
-        return self.__etype
+from src.error import VireoError, ErrorType
 
 
 class DbClient:
+    """ interact with database  """
 
     def __init__(self):
+        """ Initializes the DbClient class """
+
+        # gather the credentials for make a connection
+        # with the database
+        config = configparser.ConfigParser()
+        config.read("config.ini")
+
         self.__connection = None
-        self.__cursor = None 
+        self.__cursor = None
+        self.__info = config['DATABASE']
 
-    def initiate_connection(self,dev_mode:bool):
+    def initiate_connection(self):
+        """
+        Make a connection with the database.
+        @raise VireoError: When the connection fail with the credential of the config.ini file
+        """
 
-        if dev_mode:
+        try:
+            self.__connection = mariadb.connect(
 
-            try: 
+                user=self.__info['user'],
+                password=self.__info['password'],
+                host=self.__info['address'],
+                port=self.__info['port'],
+                database=self.__info['name']
+            )
 
-                self.__connection = mariadb.connect(
-    
-                    user=DB_USER,
-                    password=PASSWORD,
-                    host=HOST_OUTSIDE,
-                    port=PORT_FOWARDING,
-                    database=DB_NAME     
-                    )
+        except mariadb.Error as e:
+            raise VireoError(ErrorType.DbConnection, e.args[0])
 
-            except mariadb.Error as e:
-                raise DatabaseError(e.args[0],DatabaseErrorType.Connection)
-        
-        
+        # this will serve to execute query and inset
         self.__cursor = self.__connection.cursor()
 
+    def is_connected(self) -> bool:
+        """
+        check if a current connection is still connected.
+        @return: whether it can ping the database
+        """
+        try:
+            self.__connection.ping()
+        except mariadb.Error:
+            return False
 
-    def query(self,query:str,atMost:int) -> int:
+        return True
+
+    def query(self, query: str) -> List:
+        """
+        Execute a query to the database if connected to database.
+        @param query: the query to be executed
+        @return: the rows found that match the query
+        """
+
+        # check if a connection have been made
+        if self.__connection is None:
+            raise VireoError(ErrorType.DbNotConnected)
+
+        if not self.is_connected():
+            self.initiate_connection()
 
         try:
             self.__cursor.execute(query)
-            nbRow = self.__cursor.rowcount
-
-            if nbRow > atMost:
-            
-                raise DatabaseError(
-                    "Unexpected Number of return value have been found",
-                    DatabaseErrorType.UnexpectedQueryReturn
-                    )
-            
-            return nbRow
-
 
         except mariadb.Error as e:
-            raise DatabaseError(e.args[0],DatabaseErrorType.BadQuery)
+            raise VireoError(ErrorType.DbExecution, e.args[0])
 
-    def queryForValue(self,query) -> List:
+        return self.__cursor.fetchall()
 
-        try:
-            self.__cursor.execute(query)
-
-            return self.__cursor.fetchall()
-
-        except mariadb.Error as e:
-            raise DatabaseError(
-                    f"Unable to execute query reason: {e.args[0]}",
-                    DatabaseErrorType.BadQuery
-                )
-
-
-    def insert(self,query):
+    def insert(self, query):
+        """
+        Execute query that need to be committed.
+        @param query: the query to be executed
+        """
 
         try:
             self.__cursor.execute(query)
             self.__connection.commit()
         except mariadb.Error as e:
-            raise DatabaseError(
-                f"Unable to execute insert query because of: {e.args[0]}",
-                DatabaseErrorType.TableInsertion
-                )
-        
-    def alter(self,query):
-        try:
-            self.__cursor.execute(query)
-        
-        except mariadb.Error as e:
-            raise DatabaseError(
-                f"Unable to execute alter table query because of: {e.args[0]}",
-                DatabaseErrorType.TableInsertion
-                )
+            raise VireoError(ErrorType.DbInsertion, e.args[0])
