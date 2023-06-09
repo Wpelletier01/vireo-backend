@@ -170,7 +170,7 @@ class Server:
         except IndexError:
             valid_email = True
 
-        if not valid_username:
+        if not valid_email:
             return {"response": "password"}, BAD_REQUEST
 
         middle_name = f"'{data['mname']}'" if data["mname"] else "NULL"
