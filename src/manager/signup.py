@@ -55,7 +55,7 @@ class SignUpManager:
         if row == 1: 
             raise SignUpError(SignUpErrType.EmailExist)
 
-        middle_name =  data["mname"] if  data["mname"] else None
+        middle_name =  data["mname"] if  data["mname"] else "'NULL'"
         birthday = f"{data['year']}-{data['month']}-{data['day']}"
 
         # generate salt

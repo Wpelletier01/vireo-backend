@@ -1,250 +1,224 @@
-from database.client import DbClient,DatabaseError
-from manager.signin import SignInManager
-from manager.signup import SignUpManager
-from manager.upload import UploadManager
-from manager.error import SignInError,SignUpError,SignInErrType,UploadErr
+import os.path
+
+from src.database.client import DbClient
+from src.database.container import Channel
+
+# from src.manager.upload import UploadManager
+from src.manager.error import VireoError, ErrorType
 from datetime import datetime, timedelta
-
-import os
+from dataclasses import dataclass
+import logging
 import jwt
+import bcrypt
+import configparser
 
-TMP_VIDEO = "../testdb/videos"
-TMP_THUMB = "../testdb/thumbnails"
-VIDEO_CHUNK = 20
-TMP_SECRET = "1dcd2fbc17612a8ef4b5c860ed951942989b76f612e952551f9f9865c8344c71"
+SUCCESS = 200
+BAD_REQUEST = 400
+UNAUTHORIZED = 401
+FORBIDDEN = 403
+INTERNAL_ERROR = 500
+
+SIGNUP_KEY = [
+    "fname",
+    "mname",
+    "lname",
+    "username",
+    "month",
+    "day",
+    "year",
+    "email",
+    "password"
+]
 
 
-#TODO: use join table query for getting username of the channel with videos
-
+# TODO: use join table query for getting username of the channel with videos
 
 class Server:
 
-    def __init__(self,inDevelopment:bool):
+    def __init__(self):
 
-        self.db_client = DbClient()
-        self.db_client.initiate_connection(inDevelopment)
-        self.signin = SignInManager()
-        self.signup = SignUpManager()
-        self.upload = UploadManager()
+        # TODO: make sure all important key are there
+        self.__config = configparser.ConfigParser()
+        self.__config.read("config.ini")
 
-    def handleSignIn(self,data):
-        
+        # TODO: implement when not in development
+        logfile = os.path.join(self.__config['DEVELOPMENT']['db-dir'], "app.log")
+
+        self.db_client = DbClient(dict(self.__config["DATABASE"]))
+        self.db_client.initiate_connection()
+
+        self.__secret = self.__config["TOKEN"]["secret"]
+        self.__alg = self.__config["TOKEN"]["algorithm"]
+        print(self.__alg)
+
+    def process_token(self, header: dict, ipaddr: str) -> (dict, int):
+
         try:
-            self.signin.handle(data, self.db_client)
+            auth = header["Authorization"]
 
-            ctime = datetime.utcnow() + timedelta(hours=1)
-            
-            payload = {
-                
+        except KeyError:
+            logging.debug(f"{ipaddr} - request missing authorization header field")
+            return {}, BAD_REQUEST
 
-            "username": data["username"],
-            "password": data["password"],
-            "expire": ctime.timestamp()
+        # eg. authorization: Basic Tokekkekdkskakakdfkaskdfkkas
+        auth = auth.split(" ")
 
-            
-            }
-            
-            return { "token": jwt.encode(payload, TMP_SECRET) }
+        if len(auth) != 2:
+            logging.debug(f"{ipaddr} - malformed authorization header field")
+            return {}, BAD_REQUEST
 
-        except DatabaseError as e: 
-            return e.msg,500
-        
-        except SignInError as e:
-            
-            if e.etype == SignInErrType.WrongPassword:    
-                return e.msg,401
+        token = auth[1]
 
-            return e.msg,400
-
-
-    def handleSignUp(self,body:dict):
-        
         try:
-            self.signup.handle(body, self.db_client)
-        
-        except DatabaseError as e:
-            return e.msg,500
+            payload = jwt.decode(token, key=self.__secret, algorithms=self.__alg)
 
-        except SignUpError as e:
-            return e.msg,400
+        except jwt.ExpiredSignatureError as e:
+            logging.debug(f"{ipaddr} - session expire")
+            return {"response": "token expire"}, UNAUTHORIZED
 
-        return "",200
+        username = payload["username"]
+        password = payload["password"]
 
-    def addVideo(self,data):
-        #TODO: validate size
-        buffer_id = self.upload.pushToBuffer(data)
-        print(buffer_id,flush=True)
-        
-        return {"buffer_id": buffer_id},200
-
-
-    def handleVideo(self,data:dict):
-        
         try:
-            self.upload.handle(data, self.db_client)
-            return "uploaded",200
-        
-        except UploadErr as e:
-            print(e.msg,flush=True)
-            return e.msg,400
-        except DatabaseError as e:
-            return "Database",500,
+            hpassword = self.db_client.query(f"""
+            SELECT Password FROM Channels WHERE USERNAME = '{username}';""")[0][0]
 
+        except VireoError as e:
+            logging.error(f"{ipaddr} - {e}")
+            return {}, INTERNAL_ERROR
 
-    def retreive_video_info(self):
-        #TODO: check how we can join this function with getVideoInfo
-        info = { "videos": [] }
+        return SUCCESS
 
-        videos = self.db_client.queryForValue("""
-            SELECT PathHash,ChannelID,Title
-            FROM Videos;""")
-   
-        i = 0
-        
-        while i < len(videos):
+    def handle_signin(self, data, ipaddr: str) -> (dict, int):
 
+        # validate body
+        for key in ["username", "password"]:
+            found = False
 
-            hpath = videos[i][0]
-            cid = videos[i][1]
-            title = videos[i][2]
+            if key in data.keys():
+                found = True
 
-            channel = self.db_client.queryForValue(f"""
+            if not found:
+                logging.debug(f"{ipaddr} - malformed body field")
+                return {}, BAD_REQUEST
+
+        try:
+            username, hpassword = self.db_client.query(f"""
+                SELECT Username,Password 
+                FROM Channels
+                WHERE Username = '{data['username']}';""")[0]
+
+        except VireoError as e:
+            logging.error(e)
+            return {}, INTERNAL_ERROR
+        except IndexError as e:
+            return {"response": "username"}, UNAUTHORIZED
+
+        if not bcrypt.checkpw(data["password"].encode('utf-8'), hpassword.encode('utf-8')):
+            return {"response": "password"}, UNAUTHORIZED
+
+        expire = (datetime.now() + timedelta(hours=3)).timestamp()
+
+        payload = {
+            "username": username,
+            "password": hpassword,
+            "exp": expire
+        }
+
+        token = jwt.encode(payload, self.__secret, algorithm=self.__alg)
+
+        return {"token": token}, 200
+
+    def handle_sign_up(self, data: dict, ipaddr: str) -> (dict, int):
+
+        for key in SIGNUP_KEY:
+            found = False
+
+            if key in data.keys():
+                found = True
+
+            if not found:
+                return {"response": ""}, BAD_REQUEST
+
+        valid_username = False
+        try:
+
+            user = self.db_client.query(f"""
                 SELECT Username
                 FROM Channels
-                WHERE ChannelID = '{cid}';
+                WHERE Username = '{data["username"]}';""")[0][0]
 
-            """)[0][0]
+        except VireoError as e:
+            logging.error(f"{ipaddr} - {e}")
+            return {}, 500
+        except IndexError:
+            valid_username = True
 
-            info["videos"].append({
-                "thumbnail":    hpath,
-                "channel":      channel,
-                "title":        title,
-                "hpath":        hpath
-            })
+        if not valid_username:
+            return {"response": "username"}, BAD_REQUEST
 
-            i += 1
+        valid_email = False
+        try:
+            self.db_client.query(f"""
+                SELECT Email
+                FROM ChannelDetails
+                WHERE Email = '{data["email"]}';""")[0][0]
 
-        
-        return info,200
+        except VireoError as e:
+            logging.error(f"{ipaddr} - {e}")
+            return {}, 500
+        except IndexError:
+            valid_email = True
 
+        if not valid_username:
+            return {"response": "password"}, BAD_REQUEST
 
+        middle_name = f"'{data['mname']}'" if data["mname"] else "NULL"
 
-    def getVideoInfo(self,hpath:str):
+        birthday = datetime(data["year"], data["month"], data["day"])
 
-        #TODO: validate that hpath exist
+        salt = bcrypt.gensalt(rounds=14)
+        passwd = bcrypt.hashpw(data["password"].encode('utf-8'), salt)
 
         try:
-            title,desc,date,cid = self.db_client.queryForValue(f"""
-                    SELECT Title,Description,Upload,ChannelID
-                    FROM Videos
-                    WHERE PathHash = '{hpath}';""")[0]
-        
-        except IndexError: 
-            return {"status": "NOT FOUND"},200 
+            _id = self.db_client.query("""SELECT COUNT(ChannelID) FROM Channels;""")[0][0] + 1
 
-        channel  = self.db_client.queryForValue(f"""
-                SELECT Username
-                FROM Channels
-                WHERE ChannelID = '{cid}'""")[0][0]
-            
-        return {
-            "status": "FOUND",
-            "title":title,
-            "channel":channel,
-            "description": desc,
-            "date": f"{date.year}-{date.month}-{date.day}"}, 200
-        
-    
-    def getChannelVideo(self,username):
-        #TODO: try to join to retreive video info
+        except VireoError as e:
+            logging.error(f"{ipaddr} - {e}")
+            return {}, INTERNAL_ERROR
 
-        info = { "videos": [] }
-        
-        cid = self.db_client.queryForValue(f"""
+        insert1 = f"""
+            INSERT INTO Channels (
+                ChannelID,
+	            Username,
+                Password
+            )
+            VALUES 
+            ( '{_id}','{data["username"]}','{passwd}');"""
 
-            SELECT ChannelID 
-            FROM Channels
-            WHERE Username = '{username}';
+        try:
+            self.db_client.insert(insert1)
 
-        """)[0][0]
-        
+        except VireoError as e:
+            logging.error(f"{ipaddr} - {e}")
+            return {}, INTERNAL_ERROR
 
-        videos = self.db_client.queryForValue(f"""
-            SELECT PathHash,Title,Upload
-            FROM Videos
-            WHERE ChannelID = '{cid}';""")
+        insert2 = f"""
+            INSERT INTO ChannelDetails (
+                ChannelId,
+	            Fname,
+                Mname,
+                Lname,
+                Email,
+                Birth
+            )   
+            VALUES
+            (
+                {_id},
+                '{data["name"]}',
+                {middle_name},
+                '{data["lname"]}',
+                '{data["email"]}',
+                Date('{birthday.isoformat()}'));"""
 
-        print(videos)
-  
-        i = 0
-        while i < len(videos):
-
-            hpath = videos[i][0]
-            title = videos[i][1]
-            upload = videos[i][2]
-    
-
-            #TODO: no need to sent two time hpath
-            info["videos"].append({
-                "thumbnail":    hpath,
-                "title":        title,
-                "date":         f"{upload.year}-{upload.month}-{upload.day}"
-
-            })
-
-            i+=1
-     
-        return info,200
-
-
-    def search(self,stype,squery): 
-
-        resp = []
-        #TODO: add duration of info return
-
-        #TODO: make different type of query like for only channel
-        if stype == "all":
-
-            videos = self.db_client.queryForValue(f"""
-                SELECT v.Title, c.Username, v.PathHash
-                FROM Videos v
-                JOIN Channels c
-                ON v.ChannelID = c.ChannelID
-                WHERE 
-	                Title like '%{squery}%' OR
-                    Description like '%{squery}%';""")
-            
-            #TODO: add query for the number of video that each channels have
-            channels = self.db_client.queryForValue(f"""
-                SELECT Username
-                FROM Channels
-                WHERE Username like '%{squery}%';""")
-
-            
-            for video in videos:
-
-                info = {
-                    "type":     "video",
-                    "title":    video[0],
-                    "channel":  video[1],
-                    "hpath":    video[2]
-                }
-
-                resp.append(info)
-
-            for channel in channels:
-
-                print(channel[0])
-
-                #TODO: add query for the number of video that each channels have
-                info = {
-                    "type":     "channel",
-                    "channel":  channel[0],
-                    "title":     None,
-                    "hpath":    None
-
-                }
-            
-                resp.append(info)
-        
-        return { "response": resp},200
+        return {}, 200

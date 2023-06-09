@@ -1,23 +1,19 @@
-
 from dataclasses import dataclass
 from typing import Union
 
 
-
 @dataclass
 class Channel:
-    cid:        int 
-    username:   str
-    password:   str
-    fname:      str 
-    mname:      Union[str,None]
-    lname:      str 
-    email:      str 
-    birthday:   str
-
+    cid: int
+    username: str
+    password: str
+    fname: str
+    mname: Union[str, None]
+    lname: str
+    email: str
+    birthday: str
 
     def insert_to_channels(self):
-        
         return f"""
             INSERT INTO Channels (
                 ChannelID,
@@ -29,13 +25,11 @@ class Channel:
         """
 
     def insert_to_channeslDetails(self):
-
         middle_name = "NULL"
 
         if self.mname is not None:
-
             middle_name = f"'{self.mname}'"
-        
+
         return f"""
             INSERT INTO ChannelDetails (
                 ChannelId,
@@ -55,5 +49,3 @@ class Channel:
                 Date('{self.birthday}')
             );
         """
-
-

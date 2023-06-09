@@ -1,5 +1,5 @@
 from enum import Enum
-
+import werkzeug.exceptions as ex
 
 
 class SignInErrType(Enum):
@@ -102,6 +102,7 @@ class ErrorType(Enum):
     DbInsertion =       3
     DbNotConnected =    4
 
+
 class VireoError(Exception):
 
     def __init__(self, etype: ErrorType, arg: str | None = None):
@@ -124,3 +125,6 @@ class VireoError(Exception):
 
     def __str__(self):
         return self._msg
+
+
+

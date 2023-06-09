@@ -1,26 +1,19 @@
 import mariadb
-import bcrypt
 import configparser
 
-from enum import Enum
 from typing import List
-from src.error import VireoError, ErrorType
+from src.manager.error import VireoError, ErrorType
 
 
 class DbClient:
     """ interact with database  """
 
-    def __init__(self):
+    def __init__(self, config: dict):
         """ Initializes the DbClient class """
-
-        # gather the credentials for make a connection
-        # with the database
-        config = configparser.ConfigParser()
-        config.read("config.ini")
 
         self.__connection = None
         self.__cursor = None
-        self.__info = config['DATABASE']
+        self.__info = config
 
     def initiate_connection(self):
         """
@@ -31,10 +24,10 @@ class DbClient:
         try:
             self.__connection = mariadb.connect(
 
-                user=self.__info['user'],
+                user=self.__info['username'],
                 password=self.__info['password'],
                 host=self.__info['address'],
-                port=self.__info['port'],
+                port=int(self.__info['port']),
                 database=self.__info['name']
             )
 
@@ -83,6 +76,13 @@ class DbClient:
         Execute query that need to be committed.
         @param query: the query to be executed
         """
+
+        # check if a connection have been made
+        if self.__connection is None:
+            raise VireoError(ErrorType.DbNotConnected)
+
+        if not self.is_connected():
+            self.initiate_connection()
 
         try:
             self.__cursor.execute(query)

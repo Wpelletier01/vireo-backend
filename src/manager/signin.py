@@ -1,34 +1,35 @@
-from manager.error import SignInError,SignInErrType
-from database.client import DbClient
+
+from src.database.client import DbClient
 
 import bcrypt
 
 BODY_KEY = [
     "username",
     "password",
-    "utype"
+
 ]
+
+
+def __validateJsonBody(data:dict, expect_key:list):
+
+    for key in expect_key:
+        found = False
+
+        if key in data.keys():
+            found = True
+
+        if not found:
+            raise SignInError(SignInErrType.MissingField, key)
+
+    if data["utype"] not in ["email", "username"]:
+        raise SignInError(SignInErrType.BadUtype)
 
 
 class SignInManager:
 
-    def __validateJsonBody(self,data:dict,expect_key:list):
-        
-        for key in expect_key:
-            found = False
-
-            if key in data.keys():
-                found = True
-
-            if not found:
-                raise SignInError(SignInErrType.MissingField,key)
-
-        if data["utype"] not in ["email","username"]:
-            raise SignInError(SignInErrType.BadUtype)
-    
     def handle(self,data:dict,db_client:DbClient):
         
-        self.__validateJsonBody(data,BODY_KEY) 
+        __validateJsonBody(data,BODY_KEY)
 
         _id = 0
 
@@ -66,14 +67,12 @@ class SignInManager:
                 WHERE Username = '{data["username"]}';
                 """)[0][0]
 
-        epassword = data["password"].encode('utf-8')
-        hpassword = db_client.queryForValue(f"""
-            SELECT PASSWORD
-            FROM Channels
-            WHERE ChannelID = {_id};
-            """)[0][0].encode('utf-8')
+        password = data["password"].encode('utf-8')
+        hpassword = db_client.queryForValue(
+            f"""SELECT Password FROM Channels WHERE ChannelID = {_id};"""
+            )[0][0]
 
-        if not bcrypt.checkpw(epassword,hpassword):
+        if not bcrypt.checkpw(password.encode('utf-8'),hpassword):
             raise SignInError(SignInErrType.WrongPassword)
 
 
