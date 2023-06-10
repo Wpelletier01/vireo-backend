@@ -7,3 +7,4 @@ venv/**
 .pytest_cache/**
 src/manager/__pycache__/**
 src/config.ini
+src/tmp.py
