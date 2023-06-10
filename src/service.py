@@ -1,16 +1,16 @@
 from functools import wraps
-from manager.server import Server
+from manager.server import Server,VResponse
 
 from flask import Flask, request, send_file, make_response, send_from_directory,abort
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
-server = Server()
+server = Server(True)
 
 
 @app.route("/signin", methods=['POST'])
 def signin():
-    return server.handle_signin(request.get_json(), request.remote_addr)
+    return server.handle_signin(request.get_json())
 
 
 @app.route("/signup", methods=['POST'])
@@ -25,12 +25,12 @@ def upload_video():
 
 @app.route("/video/d/<string:hpath>")
 def get_video(hpath: str):
-    response, status = server.get_video(hpath)
+    response = server.get_video_path(hpath)
 
-    if status != 200:
-        return response, status
+    if isinstance(response, VResponse):
+        return response.send()
 
-    return send_file(response["response"])
+    return send_file(response)
 
 
 @app.route("/video/<string:hpath>")
@@ -46,12 +46,13 @@ def get_videos(name: str | None = None):
 
 @app.route("/thumbnails/<string:hpath>", methods=['GET'])
 def get_thumbnails(hpath: str):
-    url, response = server.get_thumbnail_path(hpath)
 
-    if response != 200:
-        return url, response
+    response = server.get_thumbnail_path(hpath)
 
-    return send_file(url["response"])
+    if isinstance(response, VResponse):
+        return response.send()
+
+    return send_file(response)
 
 
 @app.route("/search/<string:stype>/<string:squery>")

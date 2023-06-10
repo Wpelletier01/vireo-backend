@@ -18,11 +18,13 @@ _SECTIONS = {
     ],
 
     "DEVELOPMENT": [
-        "db-dir"
+        "db-dir",
+        "log-dir"
     ],
 
     "PRODUCTION": [
-        "db-dir"
+        "db-dir",
+        "log-dir"
     ]
 }
 
