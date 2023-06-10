@@ -18,7 +18,7 @@ class DbClient:
     def initiate_connection(self):
         """
         Make a connection with the database.
-        @raise VireoError: When the connection fail with the credential of the config.ini file
+        @raise VireoError: When the connection fail with the credential of the good_config.ini file
         """
 
         try:

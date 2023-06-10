@@ -1,5 +1,6 @@
 from src.database.client import DbClient
 from src.manager.error import VireoError
+from src.manager.vconf import validate_config_file
 from datetime import datetime, timedelta
 from deffcode import FFdecoder
 
@@ -15,12 +16,14 @@ import shutil
 
 # TODO: when vireo exception is raised, make them log automatically
 
+# http error code
 SUCCESS = 200
 BAD_REQUEST = 400
 UNAUTHORIZED = 401
 FORBIDDEN = 403
 INTERNAL_ERROR = 500
 
+# sign up field that needs to be found in the post-body
 SIGNUP_KEY = [
     "fname",
     "mname",
@@ -35,6 +38,13 @@ SIGNUP_KEY = [
 
 
 def _validate_body(body: dict, keys: list) -> bool:
+    """
+    Make sure that all the filed needed are there to be found
+
+    @param body: The request body that needs to be validated
+    @param keys: the keys that need to be found in the body
+    @return: true if the request body is valid
+    """
     for key in keys:
         found = False
 
@@ -47,24 +57,29 @@ def _validate_body(body: dict, keys: list) -> bool:
     return True
 
 
-# TODO: use join table query for getting username of the channel with videos
-
 class Server:
 
     def __init__(self):
+        """ initialize the Server class"""
 
-        # TODO: make sure all important key are there
+        # gather all important config value
         self.__config = configparser.ConfigParser()
-        self.__config.read("config.ini")
+        self.__config.read("good_config.ini")
+        # validate his content
+        validate_config_file(self.__config)
 
+        # Where we should found all the data (thumbnails, videos, channel picture, etc.)
         self.__data_dir = self.__config['DEVELOPMENT']['db-dir']
 
-        # TODO: implement when not in development
-        logfile = os.path.join(self.__data_dir, "app.log")
+        # Where the server log would be
+        logfile = os.path.join(self.__data_dir, "server.log")
+        logging.basicConfig(filename=logfile, filemode="w")
 
+        # Create and start a connection with the database
         self.db_client = DbClient(dict(self.__config["DATABASE"]))
         self.db_client.initiate_connection()
 
+        # secret and algorithm used for encode and decode jwt token
         self.__secret = self.__config["TOKEN"]["secret"]
         self.__alg = self.__config["TOKEN"]["algorithm"]
 
