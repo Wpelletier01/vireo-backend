@@ -3,6 +3,7 @@ from src.manager.error import VireoError
 from src.manager.vconf import validate_config_file
 from datetime import datetime, timedelta
 from deffcode import FFdecoder
+from dataclasses import dataclass
 
 import logging
 import jwt
@@ -57,6 +58,38 @@ def _validate_body(body: dict, keys: list) -> bool:
     return True
 
 
+@dataclass
+class ResponseBody:
+    stype: str
+    channel: str
+    title: str | None
+    thumbnail: str
+    upload: str | None
+    nb_video: int | None
+
+    def asDict(self) -> dict:
+        return {
+            "type": self.stype,
+            "channel": self.channel,
+            "title": self.title if self.title else "",
+            "thumbnail": self.thumbnail,
+            "nb_count": self.nb_video if self.nb_video else "",
+            "upload": self.upload if self.upload else ""
+        }
+
+
+class VResponse:
+    def __init__(self, status: int, response: str | dict | list = "", headers: dict | None = None):
+        self.status = status
+        self.response = {"response": response}
+        self.headers = headers
+
+    def send(self) -> tuple:
+        if self.headers is not None:
+            return self.response, self.status, self.headers.items()
+        return self.response, self.status
+
+
 class Server:
 
     def __init__(self):
@@ -72,11 +105,12 @@ class Server:
         self.__data_dir = self.__config['DEVELOPMENT']['db-dir']
 
         # Where the server log would be
-        logfile = os.path.join(self.__data_dir, "server.log")
-        logging.basicConfig(filename=logfile, filemode="w")
+        slogfile = os.path.join(self.__data_dir, "server.log")
+        logging.basicConfig(filename=slogfile, filemode="w")
 
         # Create and start a connection with the database
-        self.db_client = DbClient(dict(self.__config["DATABASE"]))
+        dlogfile = os.path.join(self.__data_dir, "log/db.log")
+        self.db_client = DbClient(dict(self.__config["DATABASE"]), dlogfile)
         self.db_client.initiate_connection()
 
         # secret and algorithm used for encode and decode jwt token
@@ -89,106 +123,100 @@ class Server:
             token = header.get("Vireo-Token")
 
         except KeyError:
-            return {"response": "token"}, BAD_REQUEST
+            return VResponse(BAD_REQUEST, "token")
 
         try:
             payload = jwt.decode(token, key=self.__secret, algorithms=self.__alg)
 
         except jwt.ExpiredSignatureError as e:
             logging.debug(f"{ipaddr} - session expire")
-            return {"response": "token expire"}, UNAUTHORIZED
+            return VResponse(UNAUTHORIZED, "token expire")
 
         username = payload["username"]
         password = payload["password"]
 
-        try:
-            hpasswd = self.db_client.query(f"""
+        hpasswd_resp = self.db_client.query(f"""
             SELECT Password FROM Channels WHERE USERNAME = '{username}';""")[0][0]
 
-        except VireoError as e:
-            logging.error(f"{ipaddr} - {e}")
-            return {"response": ""}, INTERNAL_ERROR
+        if hpasswd_resp is None:
+            return VResponse(INTERNAL_ERROR)
+
+        try:
+            hpasswd = hpasswd_resp
 
         except IndexError:
             logging.error(f"{ipaddr} - have jwt but his username dont exist")
-            return {"response": "bad-token-username"}, BAD_REQUEST
+            return VResponse(BAD_REQUEST, "bad-token-username")
 
         if not bcrypt.checkpw(password, hpasswd):
-            return {"response": "bad-token-password"}, BAD_REQUEST
+            return VResponse(BAD_REQUEST, "bad-token-password")
 
-        return {}, SUCCESS
+        return VResponse(SUCCESS)
 
-    def __gen_token(self, username: str, hpassword: str) -> str:
+    def __gen_token(self, username: str, hpasswd: str) -> str:
         expire = (datetime.now() + timedelta(hours=3)).timestamp()
 
         payload = {
             "username": username,
-            "password": hpassword,
+            "password": hpasswd,
             "exp": expire
         }
 
         return jwt.encode(payload, self.__secret, algorithm=self.__alg)
 
-    def __query_video(self, squery: str) -> (dict, int):
-        query = f"""
+    def __query_video(self, query: str) -> (dict, int):
+        search_query = f"""
             SELECT v.Title, c.Username, v.PathHash
             FROM Videos v
             JOIN Channels c
             ON v.ChannelID = c.ChannelID
             WHERE
-                Title like '%{squery}%' OR
-                Description like '%{squery}%';"""
+                Title like '%{query}%' OR
+                Description like '%{query}%';"""
 
-        try:
-            videos = self.db_client.query(query)
-        except VireoError as e:
-            logging.error(f"database call failed: {e}")
-            return {"response": ""}, INTERNAL_ERROR
+        videos = self.db_client.query(search_query)
+
+        if videos is None:
+            return VResponse(INTERNAL_ERROR)
 
         response = []
+
         for video in videos:
-            info = {
-                "type":         "video",
-                "title":        video[0],
-                "channel":      video[1],
-                "thumbnail":    video[2]
-            }
+            response.append(ResponseBody('video', video[1], video[0], video[2], None, None).asDict())
 
-            response.append(info)
+        return VResponse(SUCCESS, response)
 
-        return {"response": response}, SUCCESS
+    def __query_channel(self, query: str) -> (dict, int):
 
-    def __query_channel(self, squery: str) -> (dict, int):
-        # TODO: add query for the number of video that each channels have
+        # return channel name and the number of videos it has
+        search_query = f"""
+            SELECT c.Username, v.PathHash, COUNT(v.VideoID)
+            FROM Channels c
+            JOIN Videos v ON v.ChannelID = c.ChannelID
+            WHERE Username like '%{query}%';"""
 
-        try:
-            channels = self.db_client.query(f"""
-                SELECT Username
-                FROM Channels
-                WHERE Username like '%{squery}%';""")
-        except VireoError as e:
-            logging.error(f"database call failed: {e}")
-            return {"response": ""}, INTERNAL_ERROR
+        channels = self.db_client.query(search_query)
+
+        if channels is None:
+            return VResponse(INTERNAL_ERROR)
 
         response = []
 
         for channel in channels:
-            info = {
-                "type": "channel",
-                "channel": channel[0],
-                "title": None,
-                "hpath": None
+            response.append(
+                ResponseBody('channel', channel[0], None, channel[1], channel[2], None).asDict()
+            )
 
-            }
-            response.append(info)
-
-        return {"response": response}, SUCCESS
+        return VResponse(SUCCESS, response)
 
     def __create_thumbnail(self, tmp_fp: str, hash_path: str):
 
-        # TODO: check for error
         # TODO: resize for best thumbnails
+
         video = cv2.VideoCapture(tmp_fp)
+
+        if not video.isOpened():
+            raise Exception("Unable to load video")
 
         frames = video.get(cv2.CAP_PROP_FRAME_COUNT)
         frame_id = random.randint(0, frames)
@@ -197,7 +225,9 @@ class Server:
 
         success, frame = video.read()
 
-        cv2.imwrite(os.path.join(self.__data_dir, f"thumbnails/{hash_path}.png"), frame)
+        tmp_img = os.path.join(self.__data_dir, f"tmp/{hash_path}.png")
+
+        cv2.imwrite(tmp_img, frame)
 
     def handle_signin(self, data, ipaddr: str) -> (dict, int):
 
@@ -377,64 +407,42 @@ class Server:
             logging.error(f"{ipaddr} - {e}")
             return {"response": ""}, BAD_REQUEST
 
-        self.__create_thumbnail(tmp, hpath)
+        try:
+            self.__create_thumbnail(tmp, hpath)
 
-        shutil.copy(tmp, os.path.join(self.__data_dir, f"videos/{hpath}.mp4"))
+        except Exception as e:
+            logging.error(e)
+            return VResponse(INTERNAL_ERROR)
+
+        dest = os.path.join(self.__data_dir, f"videos/{hpath}.mp4")
+
+        shutil.copy(tmp, dest)
 
         return {"response": hpath}, SUCCESS
 
-    def retrieve_video_info(self, rtype: str, channel: str | None) -> (dict, str):
+    def retrieve_video_info(self, name: str | None) -> (dict, str):
 
-        videos = []
-        info = []
-        query = ""
+        query = """
+            SELECT v.PathHash, v.Title, c.Username, v.Upload
+            FROM Videos v
+            JOIN Channels c ON v.ChannelID = c.ChannelID"""
 
-        match rtype:
-            case "all":
-                query = f"""
-                    SELECT v.PathHash, v.Title, c.Username, v.Upload
-                    FROM Videos v
-                    JOIN Channels c
-                    ON v.ChannelID = c.ChannelID;"""
-
-            case "channel":
-                if channel is None:
-                    logging.error("try retrieve channel video but no username is passed")
-                    return {"response": ""}, INTERNAL_ERROR
-
-                query = f"""
-                    SELECT v.PathHash, v.Title, c.Username, v.Upload
-                    FROM Videos v
-                    JOIN Channels c
-                    ON v.ChannelID = c.ChannelID 
-                    WHERE c.Username = '{channel}';"""
-
-            case _:
-                return {"response": "bad-url-type"}, BAD_REQUEST
+        if name is None:
+            query = f"""{query}\nWHERE c.Username = '{self}';"""
 
         info = []
 
-        try:
-            videos = self.db_client.query(query)
+        videos = self.db_client.query(query)
 
-        except VireoError as e:
-            logging.error(f"database call failed: {e}")
-            return {}, INTERNAL_ERROR
+        if videos is None:
+            return VResponse(INTERNAL_ERROR)
 
         for video in videos:
-            hpath = video[0]
-            date = video[3]
-            title = video[1]
-            nchannel = video[2]
+            info.append(
+                ResponseBody('video', video[2], video[1], video[0], video[3], None).asDict()
+            )
 
-            info.append({
-                "thumbnail":    hpath,
-                "channel":      nchannel,
-                "title":        title,
-                "upload":       date
-            })
-
-        return {"response": info}, SUCCESS
+        return VResponse(SUCCESS, info)
 
     def handle_search(self, squery: str, stype: str) -> (dict, str):
 
@@ -505,6 +513,6 @@ class Server:
             "title": vinfo[0],
             "channel": vinfo[1],
             "description": vinfo[2],
-            "hpath":  hpath
-            }
+            "hpath": hpath
+        }
         }, SUCCESS

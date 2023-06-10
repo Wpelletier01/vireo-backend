@@ -38,10 +38,10 @@ def get_video_info(hpath: str):
     return server.get_vinfo(hpath)
 
 
-@app.route("/videos/<string:rtype>", methods=['GET'])
-@app.route("/videos/<string:rtype>/<string:name>", methods=['GET'])
-def get_videos(rtype: str, name: str | None = None):
-    return server.retrieve_video_info(rtype, name)
+@app.route("/videos/all", methods=['GET'])
+@app.route("/videos/channel/<string:name>", methods=['GET'])
+def get_videos(name: str | None = None):
+    return server.retrieve_video_info(name)
 
 
 @app.route("/thumbnails/<string:hpath>", methods=['GET'])

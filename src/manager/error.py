@@ -1,5 +1,6 @@
 from enum import Enum
-import werkzeug.exceptions as ex
+
+import logging
 
 class ErrorType(Enum):
     DbConnection =      1
