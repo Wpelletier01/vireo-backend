@@ -1,11 +1,7 @@
 from src.database.client import DbClient
-from src.database.container import Channel
-
-# from src.manager.upload import UploadManager
-from src.manager.error import VireoError, ErrorType
+from src.manager.error import VireoError
 from datetime import datetime, timedelta
 from deffcode import FFdecoder
-from functools import wraps
 
 import logging
 import jwt
@@ -17,7 +13,7 @@ import string
 import cv2
 import shutil
 
-# TODO: Make that when vireo exception is raised than log them automatically
+# TODO: when vireo exception is raised, make them log automatically
 
 SUCCESS = 200
 BAD_REQUEST = 400
