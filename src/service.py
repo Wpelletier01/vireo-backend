@@ -18,9 +18,13 @@ def signup():
     return server.handle_sign_up(request.get_json(), request.remote_addr)
 
 
+@app.route("/upload/v/<string:hpath>", methods=['POST'])
+def upload_video(hpath: str):
+    return server.upload_video(request.get_data(),hpath)
+
 @app.route("/upload", methods=['POST'])
-def upload_video():
-    return server.handle_upload(request.get_data(), dict(request.headers), request.remote_addr)
+def upload_video_info():
+    return server.handle_upload(dict(request.headers), request.get_json())
 
 
 @app.route("/video/d/<string:hpath>")

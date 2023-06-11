@@ -1,3 +1,9 @@
+#! /usr/bin/env python3
+#
+# Author: William Pelletier                                                     Date: 10 jun 2023
+# Email:  wpelletier.development@yahoo.com
+
+
 from src.database.client import DbClient
 from src.manager.vconf import validate_config_file
 from datetime import datetime, timedelta
@@ -12,7 +18,6 @@ import random
 import string
 import cv2
 
-# TODO: when vireo exception is raised, make them log automatically
 
 # http error code
 SUCCESS = 200
@@ -196,8 +201,8 @@ class Server:
 
     def __query_video(self, query: str) -> VResponse:
         """
-        Try to found video that contains the query in the database
-        @param query: value of the search
+        Try to found videos that contains the query in the database
+        @param query: value of the research
         @return: the result of the research if not failed
         """
 
@@ -223,6 +228,11 @@ class Server:
         return VResponse(SUCCESS, response)
 
     def __query_channel(self, query: str) -> VResponse:
+        """
+        Try to found channels that contains the query in the database
+        @param query: value of the research
+        @return: the result of the research if not failed
+        """
 
         # return channel name and the number of videos it has
         search_query = f"""
@@ -245,11 +255,16 @@ class Server:
 
         return VResponse(SUCCESS, response)
 
-    def __create_thumbnail(self, tmp_fp: str, hash_path: str):
+    def __create_thumbnail(self, fp: str, hash_path: str):
+        """
+        Take a random frame of a video to be used has a thumbnail for a video
+        @param fp: the path of the video that need a thumbnail
+        @param hash_path: the hashed path of a video
+        """
 
         # TODO: resize for best thumbnails
 
-        video = cv2.VideoCapture(tmp_fp)
+        video = cv2.VideoCapture(fp)
 
         if not video.isOpened():
             raise Exception("Unable to load video")
@@ -265,11 +280,16 @@ class Server:
 
         cv2.imwrite(tmp_img, frame)
 
-    def handle_signin(self, data) -> VResponse:
+    def handle_signin(self, data: dict) -> VResponse:
+        """
+        Handle the request by client to login
+        @param data: body of the request
+        @return: response with a jwt token generated
+        """
 
-        # validate body
-        if not _validate_body(data, ["username", "password"]):
-            return {"response": ""}, BAD_REQUEST
+        key = _validate_body(data, ["username", "password"])
+        if key is not None:
+            return VResponse(BAD_REQUEST, {"response": {"missing-field": key}})
 
         result = self.db_client.query(f"""
             SELECT Username,Password 
@@ -289,7 +309,12 @@ class Server:
 
         return VResponse(SUCCESS, {"token": self.__gen_token(username, hpassword)})
 
-    def handle_sign_up(self, data: dict) -> (dict, int):
+    def handle_sign_up(self, data: dict) -> VResponse:
+        """
+        Handle request for create new account
+        @param data: the body with the information to create an account
+        @return: a success response if everything went fine
+        """
 
         key = _validate_body(data, SIGNUP_KEY)
         if _validate_body(data, SIGNUP_KEY) is not None:
@@ -375,7 +400,12 @@ class Server:
         return VResponse(SUCCESS)
 
     def upload_video(self, data: bytes, hpath: str) -> VResponse:
-
+        """
+        upload a video to the server
+        @param data: the video
+        @param hpath: the unique hashed path of the video
+        @return: status of the request
+        """
         fp = os.path.join(self.__srv_conf["db-dir"], f"videos/{hpath}.mp4")
 
         with open(fp, "wb") as f:
@@ -388,9 +418,15 @@ class Server:
         except Exception as e:
             return VResponse(INTERNAL_ERROR)
 
-    def handle_upload(self, header: dict, body: dict) -> VResponse:
-        # TODO: validate size
+        return VResponse(SUCCESS)
 
+    def handle_upload(self, header: dict, body: dict) -> VResponse:
+        """
+        handle request for adding new video
+        @param header: the header of the request
+        @param body: the info about the video
+        @return: the status of the request
+        """
         payload, result = self.__process_token(header)
 
         if result != SUCCESS:
@@ -432,14 +468,19 @@ class Server:
 
         return VResponse(SUCCESS, hpath)
 
-    def retrieve_video_info(self, name: str | None) -> (dict, str):
+    def retrieve_video_info(self, name: str | None) -> VResponse:
+        """
+        Retrieve video info store in the database
+        @param name: a channel name if None we return all videos
+        @return: a response with all the info found
+        """
 
         query = """
             SELECT v.PathHash, v.Title, c.Username, v.Upload
             FROM Videos v
             JOIN Channels c ON v.ChannelID = c.ChannelID"""
 
-        if name is None:
+        if name is not None:
             query = f"""{query}\nWHERE c.Username = '{self}';"""
 
         info = []
@@ -456,7 +497,13 @@ class Server:
 
         return VResponse(SUCCESS, info)
 
-    def handle_search(self, squery: str, stype: str) -> (dict, str):
+    def handle_search(self, squery: str, stype: str) -> VResponse:
+        """
+        handle a search query in the database
+        @param squery: the value to found
+        @param stype: either all or channel
+        @return: a response with the info found
+        """
 
         response = []
         # TODO: add duration of info return
@@ -484,7 +531,12 @@ class Server:
 
         return VResponse(SUCCESS, response)
 
-    def get_thumbnail_path(self, hpath: str) -> str | (dict, int):
+    def get_thumbnail_path(self, hpath: str) -> str | VResponse:
+        """
+        found and return the path of the picture of a thumbnail video
+        @param hpath: the hash path of the video that needs his thumbnail
+        @return: the path of the thumbnail or an error response
+        """
         thumbnails_dir = os.path.join(self.__srv_conf["db-dir"], "thumbnails")
 
         if f"{hpath}.png" not in os.listdir(thumbnails_dir):
@@ -493,7 +545,11 @@ class Server:
         return os.path.join(thumbnails_dir, f"{hpath}.png")
 
     def get_video_path(self, hpath: str) -> str | (dict, int):
-
+        """
+        Found and return the path of the video in the server
+        @param hpath: the hash path of the video
+        @return: the path or an error response
+        """
         videos_dir = os.path.join(self.__srv_conf['db-dir'], "videos")
 
         if f"{hpath}.mp4" not in os.listdir(videos_dir):
@@ -504,7 +560,11 @@ class Server:
         return url
 
     def get_vinfo(self, hpath: str) -> VResponse:
-
+        """
+        gather info of a specific video in the database
+        @param hpath: the hash path of the video
+        @return: response with the info found
+        """
         query = f"""
             SELECT v.Title,c.Username,v.Description,v.Upload
             FROM Videos v
