@@ -1,15 +1,17 @@
 #! /usr/bin/env python3
 #
-# Author: William Pelletier                                                     Date: 10 jun 2023
-# Email:  wpelletier.development@yahoo.com
-
+# Date:     10 jun 2023
+# Author:   William Pelletier
+# Email:    wpelletier.development@yahoo.com
+#
 
 from src.database.client import DbClient
 from src.manager.vconf import validate_config_file
+from src.manager.login import Login_manager, LResponse, Source_info, BLOCKED
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 
-import logging
+# import logging
 import jwt
 import bcrypt
 import configparser
@@ -17,7 +19,6 @@ import os
 import random
 import string
 import cv2
-
 
 # http error code
 SUCCESS = 200
@@ -40,42 +41,24 @@ SIGNUP_KEY = [
 ]
 
 
-def _validate_body(body: dict, keys: list) -> str | None:
-    """
-    Make sure that all the filed needed are there to be found
-
-    @param body: The request body that needs to be validated
-    @param keys: the keys that need to be found in the body
-    @return: None if all keys are found, otherwise return the key missing
-    """
-    for key in keys:
-        found = False
-
-        if key in body.keys():
-            found = True
-
-        if not found:
-            return key
-
-    return None
-
-
 @dataclass
 class ResponseBody:
     """
     Universal response body that describe a database entry video or channel
     @param stype: video or channel
-    @param channel: channel name
-    @param title: title if its a video
+    @param channel: the username
+    @param title: title if its video
     @param thumbnail: hash path of a video or channel name
     @param upload: date when video has been uploaded
-    @param nb_video: number of video that a channel have uploaded
+    @param description: description of the video
+    @param nb_video: number of video that a channel has uploaded
     """
     stype: str
     channel: str
     title: str | None
     thumbnail: str
     upload: str | None
+    description: str | None
     nb_video: int | None
 
     def asDict(self) -> dict:
@@ -87,6 +70,18 @@ class ResponseBody:
             "thumbnail": self.thumbnail,
             "nb_count": self.nb_video if self.nb_video else "",
             "upload": self.upload if self.upload else ""
+        }
+
+    @classmethod
+    def empty(cls) -> dict:
+        return {
+            "type": "",
+            "channel": "",
+            "title": "",
+            "thumbnail": "",
+            "nb_count": "",
+            "description": "",
+            "upload": ""
         }
 
 
@@ -109,6 +104,26 @@ class VResponse:
         return self.response, self.status
 
 
+def _validate_body(body: dict, keys: list) -> str | None:
+    """
+    Make sure that all the filed needed are there to be found
+
+    @param body: The request body that needs to be validated
+    @param keys: the keys that need to be found in the body
+    @return: None if all keys are found, otherwise return the key missing
+    """
+    for key in keys:
+        found = False
+
+        if key in body.keys():
+            found = True
+
+        if not found:
+            return key
+
+    return None
+
+
 class Server:
 
     def __init__(self, dev_mod: bool):
@@ -121,13 +136,18 @@ class Server:
         validate_config_file(self.__config)
 
         if dev_mod:
+
             self.__srv_conf = self.__config['DEVELOPMENT']
         else:
             self.__srv_conf = self.__config['PRODUCTION']
 
         # Where the server log would be
         slogfile = os.path.join(self.__srv_conf['log-dir'], "server.log")
-        logging.basicConfig(filename=slogfile, filemode="w")
+
+        if not os.path.exists(slogfile):
+            open(slogfile, 'a').close()
+
+        # logging.basicConfig(filename=slogfile, filemode="a")
         # Create and start a connection with the database
         dlogfile = os.path.join(self.__srv_conf['log-dir'], "log/db.log")
         self.db_client = DbClient(dict(self.__config["DATABASE"]), dlogfile)
@@ -137,26 +157,25 @@ class Server:
         self.__secret = self.__config["TOKEN"]["secret"]
         self.__alg = self.__config["TOKEN"]["algorithm"]
 
-    def __process_token(self, header: dict) -> VResponse:
+        self.__login_manager = Login_manager()
+
+    def __process_token(self, auth: str) -> VResponse:
         """
         gather a request's header to extract a jwt token and validate his content
         @param header: the header of a rest request
         @return: VResponse with the status of the process
         """
 
-        # validate that the key needed is present
-        try:
-            token = header.get("Vireo-Token")
-
-        except KeyError:
+        if auth == "":
             return VResponse(BAD_REQUEST, "token")
 
         # decode the token
         try:
-            payload = jwt.decode(token, key=self.__secret, algorithms=self.__alg)
+            payload = jwt.decode(auth, key=self.__secret, algorithms=self.__alg)
 
         except jwt.ExpiredSignatureError:
             return VResponse(UNAUTHORIZED, "token expire")
+        print(payload, flush=True)
 
         username = payload["username"]
         password = payload["password"]
@@ -175,10 +194,10 @@ class Server:
             return VResponse(BAD_REQUEST, "bad-token-username")
 
         # validate that the password in the payload is valid
-        if not bcrypt.checkpw(password, hpasswd):
+        if password != hpasswd:
             return VResponse(BAD_REQUEST, "bad-token-password")
 
-        return VResponse(SUCCESS)
+        return VResponse(SUCCESS, payload)
 
     def __gen_token(self, username: str, hpasswd: str, nb_hr: int = 3) -> str:
         """
@@ -223,7 +242,7 @@ class Server:
         response = []
 
         for video in videos:
-            response.append(ResponseBody('video', video[1], video[0], video[2], None, None).asDict())
+            response.append(ResponseBody('video', video[1], video[0], video[2], None, None, None).asDict())
 
         return VResponse(SUCCESS, response)
 
@@ -236,7 +255,7 @@ class Server:
 
         # return channel name and the number of videos it has
         search_query = f"""
-            SELECT c.Username, v.PathHash, COUNT(v.VideoID)
+            SELECT c.Username, v.PathHash, v.Upload, COUNT(v.VideoID)
             FROM Channels c
             JOIN Videos v ON v.ChannelID = c.ChannelID
             WHERE Username like '%{query}%';"""
@@ -250,7 +269,7 @@ class Server:
 
         for channel in channels:
             response.append(
-                ResponseBody('channel', channel[0], None, channel[1], channel[2], None).asDict()
+                ResponseBody('channel', channel[0], None, channel[1], channel[2], None, channel[3]).asDict()
             )
 
         return VResponse(SUCCESS, response)
@@ -280,9 +299,10 @@ class Server:
 
         cv2.imwrite(tmp_img, frame)
 
-    def handle_signin(self, data: dict) -> VResponse:
+    def handle_signin(self, data: dict, ipaddr: str) -> VResponse:
         """
         Handle the request by client to login
+        @param ipaddr: ip address of the request
         @param data: body of the request
         @return: response with a jwt token generated
         """
@@ -290,6 +310,13 @@ class Server:
         key = _validate_body(data, ["username", "password"])
         if key is not None:
             return VResponse(BAD_REQUEST, {"response": {"missing-field": key}})
+
+        source = Source_info(ipaddr, data['username'])
+
+        lresp = self.__login_manager.can_try(source)
+
+        if lresp.status == BLOCKED:
+            return VResponse(FORBIDDEN, lresp.data)
 
         result = self.db_client.query(f"""
             SELECT Username,Password 
@@ -301,13 +328,17 @@ class Server:
 
         try:
             username, hpassword = result[0]
-        except IndexError as e:
-            return VResponse(UNAUTHORIZED, "username")
+        except IndexError:
+            d = self.__login_manager.add_attempt(source)
+            return VResponse(UNAUTHORIZED, d.data)
 
         if not bcrypt.checkpw(data["password"].encode('utf-8'), hpassword.encode('utf-8')):
-            return VResponse(UNAUTHORIZED, "password")
+            d = self.__login_manager.add_attempt(source)
+            return VResponse(UNAUTHORIZED, d.data)
 
-        return VResponse(SUCCESS, {"token": self.__gen_token(username, hpassword)})
+        self.__login_manager.remove_user(source)
+
+        return VResponse(SUCCESS, {"vtoken": self.__gen_token(username, hpassword)})
 
     def handle_sign_up(self, data: dict) -> VResponse:
         """
@@ -328,22 +359,18 @@ class Server:
         if response is None:
             return VResponse(INTERNAL_ERROR)
 
-        try:
-            _ = response[0][0]
-        except IndexError:
+        if len(response) > 0:
             return VResponse(BAD_REQUEST, "username")
 
-        response = self.db_client.query(f"""
+        email_response = self.db_client.query(f"""
             SELECT Email
             FROM ChannelDetails
-            WHERE Email = '{data["email"]}';""")[0][0]
+            WHERE Email = '{data["email"]}';""")
 
-        if response is None:
+        if email_response is None:
             return VResponse(INTERNAL_ERROR)
 
-        try:
-            _ = response[0][0]
-        except IndexError:
+        if len(email_response) > 0:
             return VResponse(BAD_REQUEST, "password")
 
         middle_name = f"'{data['mname']}'" if data["mname"] else "NULL"
@@ -358,7 +385,7 @@ class Server:
         if response is None:
             return VResponse(INTERNAL_ERROR)
 
-        _id = response[0][0]
+        _id = response[0][0] + 1
 
         insert1 = f"""
             INSERT INTO Channels (
@@ -367,7 +394,7 @@ class Server:
                 Password
             )
             VALUES 
-            ( '{_id}','{data["username"]}','{passwd}');"""
+            ( '{_id}','{data["username"]}','{passwd.decode('utf-8')}');"""
 
         resp_i1 = self.db_client.insert(insert1)
 
@@ -386,7 +413,7 @@ class Server:
             VALUES
             (
                 {_id},
-                '{data["name"]}',
+                '{data["fname"]}',
                 {middle_name},
                 '{data["lname"]}',
                 '{data["email"]}',
@@ -399,13 +426,19 @@ class Server:
 
         return VResponse(SUCCESS)
 
-    def upload_video(self, data: bytes, hpath: str) -> VResponse:
+    def upload_video(self, data: bytes, auth: str, hpath: str) -> VResponse:
         """
         upload a video to the server
+        @param auth: the token
         @param data: the video
         @param hpath: the unique hashed path of the video
         @return: status of the request
         """
+        payload = self.__process_token(auth)
+
+        if payload.status != SUCCESS:
+            return payload
+
         fp = os.path.join(self.__srv_conf["db-dir"], f"videos/{hpath}.mp4")
 
         with open(fp, "wb") as f:
@@ -415,22 +448,22 @@ class Server:
         try:
             self.__create_thumbnail(fp, hpath)
 
-        except Exception as e:
+        except Exception:
             return VResponse(INTERNAL_ERROR)
 
         return VResponse(SUCCESS)
 
-    def handle_upload(self, header: dict, body: dict) -> VResponse:
+    def handle_upload(self, auth: str, body: dict) -> VResponse:
         """
         handle request for adding new video
-        @param header: the header of the request
+        @param auth: the token
         @param body: the info about the video
         @return: the status of the request
         """
-        payload, result = self.__process_token(header)
+        payload = self.__process_token(auth)
 
-        if result != SUCCESS:
-            return VResponse(result, payload)
+        if payload.status != SUCCESS:
+            return payload
 
         key = _validate_body(body, ["title", "description"])
         if key is not None:
@@ -438,12 +471,16 @@ class Server:
 
         possibility = string.ascii_lowercase + string.ascii_lowercase + string.digits
         hpath = "".join(random.choice(possibility) for _ in range(7))
+        channel = payload.response["response"]["username"]
 
-        channel_id = self.db_client.query(
-            f"""SELECT ChannelID FROM Channels WHERE Username = '{payload["username"]}';""")
+        print("first", flush=True)
+        resp_cid = self.db_client.query(
+            f"""SELECT ChannelID FROM Channels WHERE Username = '{channel}';""")
 
-        if channel_id is None:
+        if resp_cid is None:
             return VResponse(INTERNAL_ERROR)
+
+        channel_id = resp_cid[0][0]
 
         insert = f"""
             INSERT INTO Videos(
@@ -458,9 +495,9 @@ class Server:
                 '{channel_id}',
                 '{body["title"]}',
                 '{body["description"]}',
-                Date('{datetime.now().timestamp()}')
+                Date('{datetime.now().isoformat()}')
             );"""
-
+        print("second", flush=True)
         resp = self.db_client.insert(insert)
 
         if resp is None:
@@ -481,7 +518,7 @@ class Server:
             JOIN Channels c ON v.ChannelID = c.ChannelID"""
 
         if name is not None:
-            query = f"""{query}\nWHERE c.Username = '{self}';"""
+            query = f"""{query}\nWHERE c.Username = '{name}';"""
 
         info = []
 
@@ -490,9 +527,12 @@ class Server:
         if videos is None:
             return VResponse(INTERNAL_ERROR)
 
+        if len(videos) == 0:
+            return VResponse(BAD_REQUEST, "no-channel")
+
         for video in videos:
             info.append(
-                ResponseBody('video', video[2], video[1], video[0], video[3], None).asDict()
+                ResponseBody('video', video[2], video[1], video[0], video[3], None, None).asDict()
             )
 
         return VResponse(SUCCESS, info)
@@ -510,18 +550,22 @@ class Server:
         # TODO: make different type of query like for only channel
         match stype:
             case "all":
-                videos, status = self.__query_video(squery)
+                videos_req  = self.__query_video(squery)
 
-                if status != SUCCESS:
-                    return VResponse(status, videos)
+                if videos_req.status != SUCCESS:
+                    return videos_req
+
+                videos = videos_req.response
 
                 for video in videos["response"]:
                     response.append(video)
 
-                channels, status = self.__query_channel(squery)
+                channel_req = self.__query_channel(squery)
 
-                if status != SUCCESS:
-                    return VResponse(status, channels)
+                if channel_req.status != SUCCESS:
+                    return channel_req
+
+                channels = channel_req.response
 
                 for channel in channels["response"]:
                     response.append(channel)
@@ -544,7 +588,7 @@ class Server:
 
         return os.path.join(thumbnails_dir, f"{hpath}.png")
 
-    def get_video_path(self, hpath: str) -> str | (dict, int):
+    def get_video_path(self, hpath: str) -> str | VResponse:
         """
         Found and return the path of the video in the server
         @param hpath: the hash path of the video
@@ -575,8 +619,80 @@ class Server:
         if resp is None:
             return VResponse(INTERNAL_ERROR)
 
-        vinfo = resp[0]
+        if len(resp) != 0:
+            vinfo = resp[0]
+            info = ResponseBody('video', vinfo[1], vinfo[0], hpath, vinfo[3], vinfo[2], None).asDict()
+            return VResponse(SUCCESS, info)
 
-        info = ResponseBody('video', vinfo[1], vinfo[0], hpath, vinfo[3], None).asDict()
+        return VResponse(SUCCESS, ResponseBody.empty())
 
-        return VResponse(SUCCESS, info)
+    def delete_account(self, auth: str) -> VResponse:
+
+        payload, result = self.__process_token(auth)
+
+        if result != SUCCESS:
+            return VResponse(result, payload)
+
+        q1 = f"""
+        SELECT ChannelID 
+        FROM Channels 
+        WHERE Username = {payload["username"]};"""
+
+        response = self.db_client.query(q1)
+
+        if response is None:
+            return VResponse(INTERNAL_ERROR)
+
+        _id = response[0][0]
+
+        del_channel_info = self.db_client.query(
+            f"""
+                DELETE from ChannelDetails
+                WHERE ChannelID = {_id};"""
+        )
+
+        if del_channel_info is None:
+            return VResponse(INTERNAL_ERROR)
+
+        del_channel = self.db_client.query(
+            f"""DELETE from Channels
+                WHERE ChannelID = {_id};"""
+        )
+
+        if del_channel is None:
+            return VResponse(INTERNAL_ERROR)
+
+        return VResponse(SUCCESS)
+
+    def delete_video(self, hpath: str, auth: str) -> VResponse:
+
+        payload = self.__process_token(auth)
+
+        if payload.status != 200:
+            return payload
+
+        channel = payload.response["repsonse"]["username"]
+
+        q1 = f"""
+            SELECT c.Username
+            FROM Channels c
+            JOIN Videos v ON v.ChannelID = c.ChannelID
+            WHERE v.PathHash = '{hpath}';"""
+
+        channel_resp = self.db_client.query(q1)
+
+        if channel_resp is None:
+            return VResponse(INTERNAL_ERROR)
+
+        if channel_resp != channel:
+            return VResponse(UNAUTHORIZED)
+
+        q2 = f"""
+            DELETE from Videos
+            WHERE PathHash = {hpath};"""
+
+        del_resp = self.db_client.query(q2)
+        if del_resp is None:
+            return VResponse(INTERNAL_ERROR)
+
+        return VResponse(SUCCESS)

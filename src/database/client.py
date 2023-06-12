@@ -1,5 +1,5 @@
 import mariadb
-import logging
+
 
 from typing import List
 from src.manager.error import VireoError, ErrorType
@@ -16,7 +16,7 @@ class DbClient:
         self.__info = config
 
         # TODO: change log format
-        logging.basicConfig(filename=log_file, filemode='a')
+        #logging.basicConfig(filename=log_file, filemode='a')
 
     def initiate_connection(self):
         """
@@ -70,12 +70,13 @@ class DbClient:
             self.__cursor.execute(query)
 
         except mariadb.Error as e:
-            logging.error(f"Query execution: {e}")
+            print(e)
+            #logging.error(f"Query execution: {e}")
             return None
 
         return self.__cursor.fetchall()
 
-    def insert(self, query) -> List | None:
+    def insert(self, query) -> bool | None:
         """
         Execute a query that needs to be committed.
         @param query: The query to be executed
@@ -86,7 +87,8 @@ class DbClient:
             raise VireoError(ErrorType.DbNotConnected)
 
         if not self.is_connected():
-            logging.error("try to execute query to database but no connection is made")
+            #logging.error("try to execute query to database but no connection is made")
+            print("try to execute query to database but no connection is made")
             return None
 
         try:
@@ -94,5 +96,7 @@ class DbClient:
             self.__connection.commit()
 
         except mariadb.Error as e:
-            logging.error(f"Query execution: {e}")
+            print(e)
             return None
+
+        return True

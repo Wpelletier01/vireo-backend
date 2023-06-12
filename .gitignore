@@ -1,10 +1,11 @@
 src/__pycache__/**
 src/database/__pycache__/**
 src/test/__pycache__/**
-src/testdb/**
+testdb/**
 thumbnaildb-tmp/**
 venv/**
 .pytest_cache/**
 src/manager/__pycache__/**
-src/config.ini
+config.ini
 src/tmp.py
+.idea/**
