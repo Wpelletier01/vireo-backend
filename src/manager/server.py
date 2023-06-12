@@ -26,6 +26,7 @@ BAD_REQUEST = 400
 UNAUTHORIZED = 401
 FORBIDDEN = 403
 INTERNAL_ERROR = 500
+NOT_FOUND = 404
 
 # sign up field that needs to be found in the post-body
 SIGNUP_KEY = [
@@ -620,11 +621,12 @@ class Server:
             return VResponse(INTERNAL_ERROR)
 
         if len(resp) != 0:
+
             vinfo = resp[0]
             info = ResponseBody('video', vinfo[1], vinfo[0], hpath, vinfo[3], vinfo[2], None).asDict()
             return VResponse(SUCCESS, info)
 
-        return VResponse(SUCCESS, ResponseBody.empty())
+        return VResponse(NOT_FOUND)
 
     def delete_account(self, auth: str) -> VResponse:
 
