@@ -38,7 +38,7 @@ def get_video(hpath: str):
     return send_file(response)
 
 
-@app.route("/video/<string:hpath>")
+@app.route("/v/<string:hpath>")
 def get_video_info(hpath: str):
     return server.get_vinfo(hpath).send()
 
