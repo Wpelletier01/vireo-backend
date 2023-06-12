@@ -70,7 +70,8 @@ class ResponseBody:
             "title": self.title if self.title else "",
             "thumbnail": self.thumbnail,
             "nb_count": self.nb_video if self.nb_video else "",
-            "upload": self.upload if self.upload else ""
+            "upload": self.upload if self.upload else "",
+            "description": self.description if self.description else ""
         }
 
     @classmethod
