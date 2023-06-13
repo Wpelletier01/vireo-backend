@@ -2,7 +2,7 @@ import mariadb
 
 
 from typing import List
-from src.manager.error import VireoError, ErrorType
+from manager.error import VireoError, ErrorType
 
 
 class DbClient:
@@ -70,7 +70,7 @@ class DbClient:
             self.__cursor.execute(query)
 
         except mariadb.Error as e:
-            print(e)
+            print(e,flush=True)
             #logging.error(f"Query execution: {e}")
             return None
 

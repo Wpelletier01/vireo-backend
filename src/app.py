@@ -1,6 +1,8 @@
 from flask import Flask, request, send_file
 from manager.server import Server, VResponse
 
+import time
+
 app = Flask(__name__)
 server = Server(True)
 
@@ -62,6 +64,18 @@ def get_thumbnails(hpath: str):
 @app.route("/search/<string:stype>/<string:squery>")
 def get_search_result(stype: str, squery: str):
     return server.handle_search(squery, stype).send()
+
+
+@app.route("/channel/picture/<string:name>", methods=["GET"])
+def get_channel_picture(name: str):
+    time.sleep(0.5)
+    resp = server.get_channel_img_path(name)
+
+    if resp.status != 200:
+        return resp.send()
+
+
+    return send_file(resp.response['response'])
 
 
 if __name__ == "__main__":

@@ -5,9 +5,9 @@
 # Email:    wpelletier.development@yahoo.com
 #
 
-from src.database.client import DbClient
-from src.manager.vconf import validate_config_file
-from src.manager.login import Login_manager, LResponse, Source_info, BLOCKED
+from database.client import DbClient
+from manager.vconf import validate_config_file
+from manager.login import Login_manager, LResponse, Source_info, BLOCKED
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 
@@ -267,6 +267,8 @@ class Server:
         if channels is None:
             return VResponse(INTERNAL_ERROR)
 
+        if channels[0][3] == 0:
+            return VResponse(SUCCESS, [])
         response = []
 
         for channel in channels:
@@ -552,7 +554,7 @@ class Server:
         # TODO: make different type of query like for only channel
         match stype:
             case "all":
-                videos_req  = self.__query_video(squery)
+                videos_req = self.__query_video(squery)
 
                 if videos_req.status != SUCCESS:
                     return videos_req
@@ -622,12 +624,29 @@ class Server:
             return VResponse(INTERNAL_ERROR)
 
         if len(resp) != 0:
-
             vinfo = resp[0]
             info = ResponseBody('video', vinfo[1], vinfo[0], hpath, vinfo[3], vinfo[2], None).asDict()
             return VResponse(SUCCESS, info)
 
         return VResponse(NOT_FOUND)
+
+    def get_channel_img_path(self, cname: str):
+
+        query = f"""
+        SELECT ChannelID 
+        FROM Channels
+        WHERE Username = '{cname}';"""
+        resp = self.db_client.query(query)
+
+        if resp is None:
+            return VResponse(INTERNAL_ERROR)
+
+        if len(resp) == 0:
+            return VResponse(NOT_FOUND)
+
+        url = os.path.join(self.__srv_conf['db-dir'], f"cpicture/c{resp[0][0]}.jpg")
+
+        return VResponse(SUCCESS, url)
 
     def delete_account(self, auth: str) -> VResponse:
 
