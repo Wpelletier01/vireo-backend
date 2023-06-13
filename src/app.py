@@ -7,7 +7,7 @@ app = Flask(__name__)
 server = Server(True)
 
 
-@app.route("/signin", methods=['POST'])
+@app.route("/sign_in", methods=['POST'])
 def signin():
     if not request.is_json:
         return {"response": "bad-content-type"}, 400
@@ -15,7 +15,7 @@ def signin():
     return server.handle_signin(request.get_json(), request.remote_addr).send()
 
 
-@app.route("/signup", methods=['POST'])
+@app.route("/sign_up", methods=['POST'])
 def signup():
     return server.handle_sign_up(request.get_json()).send()
 
