@@ -42,8 +42,8 @@ TODO
 
 ## Api Call 
 
-All the api call return a body with the key "response" Either empty or with data.
-expect for sending file like a video or an image. 
+All the api calls return a body with the key "response" Either empty or with data,
+except for sending file like a video or an image. 
 
 the universal return value when request info on channels or videos is formed like this:
 
@@ -64,7 +64,12 @@ parameter:
 - password: string
 
 return:
-- Jwt token generated with the parameter passed as payload that expires in 3 hours
+- 200 -> Jwt token generated with the parameter passed as payload that expires in 3 hours
+- 400 -> missing field in the body
+- 402 -> either the username or password is wrong (number of attempts left before being blocked)
+- 403 -> blocked for too many attempts (with the time left before unblock)
+
+_*Note that some functionality of the login manager has not been tested_
 
 ### POST <u>/sign_up</u>
 parameter:
@@ -80,6 +85,13 @@ parameter:
 
 return:
 - 200 if creation succeeds
+- 400 
+    - Missing field in the body
+    - A channel with the username pass already exists
+    - A channel with the email pass already exists
+  
+_*Note that the verification of the input should be made on the client side for now_
+
 
 ### POST <u>/upload</u>
 *require token
@@ -90,7 +102,13 @@ parameter:
 - title
 - description
 return:
-- a hash path of the video
+- 200 -> a hash path of the video
+- 400
+    - missing field in the body
+    - no token in the header
+    - somehow the payload of the token has been altered
+- 401 -> if token expire
+
 
 ### POST <u>/upload/v/</u>*hashpath*
 upload a video with a hashed path as id from the url
@@ -100,19 +118,78 @@ parameter:
 - a raw data video
 
 return:
-- 200 if succeed
+- 200 -> empty
+- 400
+    - no token in the header
+    - somehow the payload of the token has been altered
+- 401 -> if token expire
 
 _*Note that it has been only tested for mp4 format file for now_
+_*Also not tested when no data is passed
 
-### GET <u>/video/d/</u>*hashpath*
+### GET <u>/v/</u>*hashpath*
 retrieve info of a specific video
 
 parameter:
 - the hash path in the url
 
 return:
-- A universal return body
-   
+- 200 -> A universal return body
+- 404 -> The hash path doesn't exist 
+
+### GET <u>/video/d/</u>*hashpath*
+get a video file
+
+parameter:
+- The hash path in the url
+
+return:
+- 200 -> the video
+- 400 -> if no video exists with the hash path passed
+
+### GET <u>/videos/all</u> or <u>/videos/channel/</u>*channel_name*
+Return all the video we have or all the video of a specific channel
+
+parameter:
+- The channel name if not all videos
+
+return:
+- 200 -> List of universal return body
+- 404 -> if channel dont exist
+
+### GET <u>/thumbnails/</u>*hashpath*
+Return the thumbnails of a specific video
+
+parameter:
+- The hash path in the url
+
+return:
+- 200 -> The image
+- 404 -> if video doesn't exist
+
+### GET <u>/search/</u>*stype*/*squery*
+perform a query in the database either by channel name or video name
+
+parameter:
+- search type in the url, either all or channel
+- the query in the url
+
+return: 
+- 200 -> List of universal return body
+- 400 -> Bad search type
+
+
+### GET <u>/channel/picture/</u>*channel_name*
+return the profile picture of the channel
+
+parameter:
+- channel name in the url
+
+return:
+- 200 -> An image file
+- 404 -> No Channel found
+
+_*Note that it's not stable for now._
 
 
 ## Database 
@@ -152,3 +229,13 @@ it stores information about a video uploaded by a user
 
 
 ## TODO
+
+- [ ] validate the input parameter before creating an account
+  - [ ] validate that the birthday date is valid when creating
+  - [ ] other ..
+- [ ] Api call for deleting video
+- [ ] Api call for deleting channel 
+    
+- [ ] sending email
+  - [ ] forgot password
+  - [ ] notification

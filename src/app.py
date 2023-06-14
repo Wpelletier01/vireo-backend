@@ -61,7 +61,7 @@ def get_thumbnails(hpath: str):
     return send_file(response)
 
 
-@app.route("/search/<string:stype>/<string:squery>")
+@app.route("/search/<string:stype>/<string:squery>", methods=['GET'])
 def get_search_result(stype: str, squery: str):
     return server.handle_search(squery, stype).send()
 
@@ -73,7 +73,6 @@ def get_channel_picture(name: str):
 
     if resp.status != 200:
         return resp.send()
-
 
     return send_file(resp.response['response'])
 

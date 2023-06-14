@@ -375,7 +375,7 @@ class Server:
             return VResponse(INTERNAL_ERROR)
 
         if len(email_response) > 0:
-            return VResponse(BAD_REQUEST, "password")
+            return VResponse(BAD_REQUEST, "email")
 
         middle_name = f"'{data['mname']}'" if data["mname"] else "NULL"
 
@@ -522,6 +522,17 @@ class Server:
             JOIN Channels c ON v.ChannelID = c.ChannelID"""
 
         if name is not None:
+
+            channel = self.db_client.query(f"""
+                SELECT ChannelID
+                FROM Channels
+                WHERE Username = {name};""")
+            if channel is None:
+                return VResponse(INTERNAL_ERROR)
+
+            if len(channel) == 0:
+                return VResponse(NOT_FOUND, "channel")
+
             query = f"""{query}\nWHERE c.Username = '{name}';"""
 
         info = []
@@ -530,9 +541,6 @@ class Server:
 
         if videos is None:
             return VResponse(INTERNAL_ERROR)
-
-        if len(videos) == 0:
-            return VResponse(BAD_REQUEST, "no-channel")
 
         for video in videos:
             info.append(
@@ -588,7 +596,7 @@ class Server:
         thumbnails_dir = os.path.join(self.__srv_conf["db-dir"], "thumbnails")
 
         if f"{hpath}.png" not in os.listdir(thumbnails_dir):
-            return VResponse(BAD_REQUEST, "no-thumbnails")
+            return VResponse(NOT_FOUND, "no-thumbnails")
 
         return os.path.join(thumbnails_dir, f"{hpath}.png")
 
