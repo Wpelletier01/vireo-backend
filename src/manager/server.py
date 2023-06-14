@@ -379,7 +379,7 @@ class Server:
 
         middle_name = f"'{data['mname']}'" if data["mname"] else "NULL"
 
-        birthday = datetime(data["year"], data["month"], data["day"])
+        birthday = datetime(int(data["year"]), int(data["month"]), int(data["day"]))
 
         salt = bcrypt.gensalt(rounds=14)
         passwd = bcrypt.hashpw(data["password"].encode('utf-8'), salt)
