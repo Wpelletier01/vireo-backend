@@ -235,7 +235,7 @@ it stores information about a video uploaded by a user
   - [ ] other ..
 - [ ] Api call for deleting video
 - [ ] Api call for deleting channel 
-    
+- [ ] Script for installing the service
 - [ ] sending email
   - [ ] forgot password
   - [ ] notification
