@@ -22,10 +22,6 @@ _SECTIONS = {
         "log-dir"
     ],
 
-    "PRODUCTION": [
-        "db-dir",
-        "log-dir"
-    ]
 }
 
 

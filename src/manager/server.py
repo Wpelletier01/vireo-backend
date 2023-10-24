@@ -11,7 +11,7 @@ from manager.login import Login_manager, LResponse, Source_info, BLOCKED
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 
-# import logging
+import logging
 import jwt
 import bcrypt
 import configparser
@@ -133,7 +133,7 @@ class Server:
 
         # gather all important config value
         self.__config = configparser.ConfigParser()
-        self.__config.read("config.ini")
+        self.__config.read("../config.ini")
         # validate his content
         validate_config_file(self.__config)
 
@@ -143,14 +143,19 @@ class Server:
         else:
             self.__srv_conf = self.__config['PRODUCTION']
 
+
+        if not os.path.exists(self.__srv_conf['log-dir']):
+            os.makedirs(self.__srv_conf['log-dir'])
+
+
         # Where the server log would be
         slogfile = os.path.join(self.__srv_conf['log-dir'], "server.log")
 
         if not os.path.exists(slogfile):
-            open(slogfile, 'a').close()
+            open(slogfile, 'w').close()
 
-        # logging.basicConfig(filename=slogfile, filemode="a")
-        # Create and start a connection with the database
+        #logging.basicConfig(filename=slogfile, filemode="a")
+        #Create and start a connection with the database
         dlogfile = os.path.join(self.__srv_conf['log-dir'], "log/db.log")
         self.db_client = DbClient(dict(self.__config["DATABASE"]), dlogfile)
         self.db_client.initiate_connection()
@@ -173,7 +178,7 @@ class Server:
 
         # decode the token
         try:
-            payload = jwt.decode(auth, key=self.__secret, algorithms=self.__alg)
+            payload = jwt.decode(auth, key=self.__secret)
 
         except jwt.ExpiredSignatureError:
             return VResponse(UNAUTHORIZED, "token expire")
