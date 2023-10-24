@@ -1,1 +1,5 @@
 flask
+mariadb
+jwt
+bcrypt
+opencv-python
