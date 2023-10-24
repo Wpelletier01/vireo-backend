@@ -3,6 +3,5 @@ testdb/**
 thumbnaildb-tmp/**
 /venv
 .pytest_cache/**
-config.ini
 src/tmp.py
 .idea/**
